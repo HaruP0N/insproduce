@@ -812,11 +812,12 @@ function InspeccionesTab() {
 }
 
 /** =========================
- *  TAB: TRABAJADORES
+ *  TAB: TRABAJADORES (🔧 CORREGIDO)
  *  ========================= */
 function TrabajadoresTab() {
   const [usuarios, setUsuarios] = useState([])
   const [loading, setLoading] = useState(true)
+  const [errorMsg, setErrorMsg] = useState('')
   
   // Modales
   const [createOpen, setCreateOpen] = useState(false)
@@ -843,12 +844,61 @@ function TrabajadoresTab() {
 
   const fetchUsers = async () => {
     setLoading(true)
+    setErrorMsg('')
+    
     try {
-      const res = await fetch('/api/users', { credentials: 'include' })
-      const data = await res.json().catch(() => [])
-      setUsuarios(Array.isArray(data) ? data : [])
+      console.log('📡 Iniciando petición a /api/users...')
+      
+      const res = await fetch('/api/users', { 
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      console.log('📡 Response status:', res.status, res.statusText)
+      
+      // 🔧 Manejar diferentes códigos de error
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ msg: 'Error desconocido' }))
+        console.error('❌ Error en respuesta:', errorData)
+        
+        if (res.status === 401 || res.status === 403) {
+          setErrorMsg('No tienes permisos para ver esta sección. Debes ser administrador.')
+        } else {
+          setErrorMsg(errorData?.msg || `Error ${res.status}: No se pudieron cargar los usuarios`)
+        }
+        
+        setUsuarios([])
+        return
+      }
+      
+      const data = await res.json()
+      console.log('📋 Data recibida:', data)
+      console.log('📋 Tipo de data:', typeof data, Array.isArray(data))
+      
+      if (!Array.isArray(data)) {
+        console.warn('⚠️ La respuesta no es un array:', data)
+        setErrorMsg('Formato de respuesta inválido del servidor')
+        setUsuarios([])
+        return
+      }
+      
+      // 🔧 FIX CRÍTICO: Normalizar el campo active
+      // SQL Server devuelve 1/0, necesitamos convertirlo a boolean
+      const normalizedUsers = data.map(u => ({
+        ...u,
+        active: Boolean(u.active) // Convierte 1 → true, 0 → false
+      }))
+      
+      console.log('✅ Usuarios normalizados:', normalizedUsers.length, normalizedUsers)
+      setUsuarios(normalizedUsers)
+      
     } catch (err) {
-      console.error(err)
+      console.error('❌ Error en fetchUsers:', err)
+      setErrorMsg('Error de conexión: ' + err.message)
+      setUsuarios([])
     } finally {
       setLoading(false)
     }
@@ -958,9 +1008,11 @@ function TrabajadoresTab() {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 14
+      marginBottom: 14,
+      flexWrap: 'wrap',
+      gap: 12
     },
-    title: { margin: 0, color: '#2E7D32' },
+    title: { margin: 0, color: '#2E7D32', fontSize: 22, fontWeight: 900 },
     btn: (variant = 'primary') => {
       const base = {
         borderRadius: 12,
@@ -1054,16 +1106,51 @@ function TrabajadoresTab() {
       background: active ? '#e8f5e9' : '#fee',
       color: active ? '#2E7D32' : '#c62828',
       border: `1px solid ${active ? '#a7d7ad' : '#fca'}`
-    })
+    }),
+    errorBox: {
+      padding: 16,
+      background: '#fee',
+      border: '1px solid #fca',
+      borderRadius: 12,
+      color: '#c62828',
+      fontSize: 14,
+      marginBottom: 16
+    }
   }
 
-  if (loading) return <div style={{ padding: 30 }}>Cargando trabajadores...</div>
+  if (loading) {
+    return (
+      <div style={styles.container}>
+        <div style={{ padding: 30, textAlign: 'center', color: '#667085' }}>
+          ⏳ Cargando trabajadores...
+        </div>
+      </div>
+    )
+  }
+
+  if (errorMsg) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.errorBox}>
+          ⚠️ {errorMsg}
+        </div>
+        <button style={styles.btn('primary')} onClick={fetchUsers}>
+          🔄 Reintentar
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
         <div style={styles.header}>
-          <h2 style={styles.title}>Gestión de Trabajadores</h2>
+          <div>
+            <h2 style={styles.title}>Gestión de Trabajadores</h2>
+            <p style={{ margin: '4px 0 0', color: '#667085', fontSize: 13 }}>
+              Total de usuarios: {usuarios.length}
+            </p>
+          </div>
           <button style={styles.btn('primary')} onClick={() => setCreateOpen(true)}>
             ➕ Crear Usuario
           </button>
@@ -1100,7 +1187,7 @@ function TrabajadoresTab() {
                   </span>
                 </td>
                 <td style={styles.td}>
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button style={styles.btn('outline')} onClick={() => openEdit(u)}>
                       ✏️ Editar
                     </button>
@@ -1402,7 +1489,7 @@ export default function PanelAdmin() {
                   onMouseEnter={(e) => e.currentTarget.style.background = '#fee'}
                   onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                 >
-                  🚪 {loggingOut ? 'Cerrando…' : 'Cerrar sesión'}
+                    {loggingOut ? 'Cerrando…' : 'Cerrar sesión'}
                 </div>
               </div>
             )}
