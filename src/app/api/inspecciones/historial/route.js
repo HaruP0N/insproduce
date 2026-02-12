@@ -6,7 +6,7 @@ export async function GET(req) {
   const v = await verifyTokenFromCookies(req)
   if (!v.ok) return NextResponse.json({ msg: v.msg }, { status: v.status })
 
-  if (v.payload?.role !== 'admin') {
+  if (v.user?.role !== 'admin') {
     return NextResponse.json({ msg: 'Solo admin' }, { status: 403 })
   }
 
