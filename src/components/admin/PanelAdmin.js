@@ -20,7 +20,6 @@ function formatDateDDMMYYYY(dateStr) {
 }
 
 function getMetricValue(metrics, key) {
-  // metrics puede venir como objeto o string json
   if (!metrics) return ''
   let m = metrics
   try {
@@ -45,17 +44,14 @@ function InspeccionesTab() {
   const [search, setSearch] = useState('')
   const [soloPendientePDF, setSoloPendientePDF] = useState(false)
 
-  // modal detalle
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detail, setDetail] = useState(null)
 
-  // modal editar cabecera
   const [editHeaderOpen, setEditHeaderOpen] = useState(false)
   const [headerDraft, setHeaderDraft] = useState(null)
   const [savingHeader, setSavingHeader] = useState(false)
 
-  // modal editar métricas
   const [editMetricsOpen, setEditMetricsOpen] = useState(false)
   const [metricsDraft, setMetricsDraft] = useState(null)
   const [savingMetrics, setSavingMetrics] = useState(false)
@@ -82,7 +78,6 @@ function InspeccionesTab() {
 
   useEffect(() => {
     fetchDatos()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const pdfEstaOk = (i) => !!i.pdf_url
@@ -106,7 +101,6 @@ function InspeccionesTab() {
     const total = inspecciones.length
     const pdfPendientes = inspecciones.filter((i) => !pdfEstaOk(i)).length
 
-    // ejemplo: brix general.brix
     const brixValues = inspecciones
       .map((i) => Number(String(getMetricValue(i.metrics, 'general.brix')).replace(',', '.')))
       .filter((n) => Number.isFinite(n))
@@ -119,7 +113,6 @@ function InspeccionesTab() {
 
   const openPdf = (insp) => {
     if (!insp?.pdf_url) return
-    // si pdf_url es absoluta, se abre tal cual
     window.open(`/api/inspecciones/${insp.id}/pdf`, '_blank', 'noopener,noreferrer')
   }
 
@@ -223,18 +216,27 @@ function InspeccionesTab() {
 
   const openEditMetrics = () => {
     if (!detail) return
+    
     let m = detail.metrics
+    
+    // 🔧 FIX: Parsear correctamente
     try {
-      if (typeof m === 'string') m = JSON.parse(m)
+      if (typeof m === 'string') {
+        m = JSON.parse(m)
+      }
     } catch {
-      m = {}
+      m = { values: {} }
     }
+
+    // 🔧 Asegurar que values existe
+    const values = m?.values || {}
 
     setMetricsDraft({
       template_id: m?.template_id ?? null,
       template_version: m?.template_version ?? null,
-      values: { ...(m?.values || {}) }
+      values: { ...values }
     })
+    
     setEditMetricsOpen(true)
   }
 
@@ -275,13 +277,12 @@ function InspeccionesTab() {
       alert('✅ Métricas actualizadas')
     } catch (err) {
       console.error(err)
-      alert(err?.message || 'Error al guardar métricas (si fue 404, te falta el endpoint /metrics)')
+      alert(err?.message || 'Error al guardar métricas')
     } finally {
       setSavingMetrics(false)
     }
   }
 
-  /** ✅ ESTILOS CLARITOS (sin negro) */
   const styles = {
     container: { maxWidth: 1240, margin: '0 auto', padding: 18 },
     topRow: {
@@ -446,7 +447,14 @@ function InspeccionesTab() {
       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
       fontSize: 12
     },
-    field: { width: '100%', padding: 10, borderRadius: 12, border: '1px solid #e5e7eb' }
+    field: { 
+      width: '100%', 
+      padding: 10, 
+      borderRadius: 12, 
+      border: '1px solid #e5e7eb',
+      backgroundColor: '#ffffff',
+      color: '#111827'
+    }
   }
 
   if (loading) return <div style={{ padding: 30, textAlign: 'center' }}>Cargando panel…</div>
@@ -542,7 +550,7 @@ function InspeccionesTab() {
 
                   <td style={styles.td}>
                     <span style={styles.badge(pdfOk ? 'pdfOk' : 'pdfPend')}>
-                      {pdfOk ? 'PDF OK' : 'PDF PENDIENTE'}
+                      {pdfOk ? '✅ PDF GENERADO' : '⏳ PDF PENDIENTE'}
                     </span>
                   </td>
 
@@ -578,9 +586,7 @@ function InspeccionesTab() {
         </table>
       </div>
 
-      {/* =======================
-          MODAL DETALLE
-      ======================= */}
+      {/* MODAL DETALLE */}
       {detailOpen && (
         <div style={styles.modalOverlay} onMouseDown={(e) => e.target === e.currentTarget && closeDetalle()}>
           <div style={styles.modal}>
@@ -687,9 +693,7 @@ function InspeccionesTab() {
         </div>
       )}
 
-      {/* =======================
-          MODAL EDITAR CABECERA
-      ======================= */}
+      {/* MODAL EDITAR CABECERA */}
       {editHeaderOpen && headerDraft && (
         <div style={styles.modalOverlay} onMouseDown={(e) => e.target === e.currentTarget && closeEditHeader()}>
           <div style={styles.modal}>
@@ -744,9 +748,7 @@ function InspeccionesTab() {
         </div>
       )}
 
-      {/* =======================
-          MODAL EDITAR METRICAS
-      ======================= */}
+      {/* MODAL EDITAR METRICAS */}
       {editMetricsOpen && metricsDraft && (
         <div style={styles.modalOverlay} onMouseDown={(e) => e.target === e.currentTarget && closeEditMetrics()}>
           <div style={styles.modal}>
@@ -810,42 +812,475 @@ function InspeccionesTab() {
 }
 
 /** =========================
- *  TAB: TRABAJADORES (placeholder)
- *  Si ya tienes PanelTrabajadores en Next, lo importas acá.
+ *  TAB: TRABAJADORES
  *  ========================= */
 function TrabajadoresTab() {
+  const [usuarios, setUsuarios] = useState([])
+  const [loading, setLoading] = useState(true)
+  
+  // Modales
+  const [createOpen, setCreateOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editUser, setEditUser] = useState(null)
+  
+  // Form crear
+  const [newUser, setNewUser] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'inspector'
+  })
+  
+  // Form editar
+  const [editForm, setEditForm] = useState({
+    name: '',
+    email: '',
+    role: '',
+    password: ''
+  })
+
+  const [saving, setSaving] = useState(false)
+
+  const fetchUsers = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/users', { credentials: 'include' })
+      const data = await res.json().catch(() => [])
+      setUsuarios(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchUsers()
+  }, [])
+
+  const handleCreate = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser)
+      })
+      
+      const data = await res.json()
+      
+      if (!res.ok) throw new Error(data?.msg || 'Error al crear usuario')
+      
+      alert('✅ Usuario creado exitosamente')
+      setCreateOpen(false)
+      setNewUser({ name: '', email: '', password: '', role: 'inspector' })
+      await fetchUsers()
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const openEdit = (user) => {
+    setEditUser(user)
+    setEditForm({
+      name: user.name || '',
+      email: user.email || '',
+      role: user.role || '',
+      password: ''
+    })
+    setEditOpen(true)
+  }
+
+  const handleEdit = async (e) => {
+    e.preventDefault()
+    if (!editUser?.id) return
+    
+    setSaving(true)
+    
+    try {
+      const res = await fetch(`/api/users/${editUser.id}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm)
+      })
+      
+      const data = await res.json()
+      
+      if (!res.ok) throw new Error(data?.msg || 'Error al actualizar')
+      
+      alert('✅ Usuario actualizado')
+      setEditOpen(false)
+      await fetchUsers()
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggleActive = async (user) => {
+    if (!confirm(`¿${user.active ? 'Desactivar' : 'Activar'} usuario ${user.email}?`)) return
+    
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: !user.active })
+      })
+      
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.msg)
+      
+      alert(`✅ ${data.msg}`)
+      await fetchUsers()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  const styles = {
+    container: { padding: 18, maxWidth: 1240, margin: '0 auto' },
+    card: {
+      background: '#fff',
+      borderRadius: 16,
+      border: '1px solid #eef2f7',
+      boxShadow: '0 4px 22px rgba(16,24,40,0.08)',
+      padding: 18
+    },
+    header: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 14
+    },
+    title: { margin: 0, color: '#2E7D32' },
+    btn: (variant = 'primary') => {
+      const base = {
+        borderRadius: 12,
+        padding: '10px 14px',
+        fontSize: 13,
+        fontWeight: 900,
+        cursor: 'pointer',
+        border: '1px solid transparent',
+        display: 'inline-flex',
+        gap: 6,
+        alignItems: 'center'
+      }
+      if (variant === 'primary') return { ...base, background: '#2E7D32', color: '#fff' }
+      if (variant === 'gray') return { ...base, background: '#64748b', color: '#fff' }
+      if (variant === 'danger') return { ...base, background: '#c62828', color: '#fff' }
+      if (variant === 'outline') return { ...base, background: '#fff', border: '1px solid #2E7D32', color: '#2E7D32' }
+      return base
+    },
+    table: { width: '100%', borderCollapse: 'collapse', fontSize: 14, marginTop: 14 },
+    th: {
+      padding: 12,
+      textAlign: 'left',
+      borderBottom: '2px solid #eef2f7',
+      color: '#2E7D32',
+      fontSize: 11,
+      textTransform: 'uppercase'
+    },
+    td: { padding: 12, borderBottom: '1px solid #eef2f7' },
+    
+    modalOverlay: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.4)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 9999,
+      padding: 16
+    },
+    modal: {
+      background: '#fff',
+      borderRadius: 16,
+      maxWidth: 500,
+      width: '100%',
+      boxShadow: '0 14px 40px rgba(0,0,0,0.3)'
+    },
+    modalHeader: {
+      padding: 16,
+      borderBottom: '1px solid #eef2f7',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    },
+    modalTitle: { margin: 0, color: '#2E7D32', fontSize: 18 },
+    modalBody: { padding: 16 },
+    modalFooter: {
+      padding: 16,
+      borderTop: '1px solid #eef2f7',
+      display: 'flex',
+      justifyContent: 'flex-end',
+      gap: 10
+    },
+    formGroup: { marginBottom: 14 },
+    label: { display: 'block', fontSize: 12, fontWeight: 900, color: '#374151', marginBottom: 6 },
+    input: {
+      width: '100%',
+      padding: 10,
+      borderRadius: 10,
+      border: '1px solid #e5e7eb',
+      fontSize: 14,
+      backgroundColor: '#fff',
+      color: '#111827',
+      boxSizing: 'border-box'
+    },
+    select: {
+      width: '100%',
+      padding: 10,
+      borderRadius: 10,
+      border: '1px solid #e5e7eb',
+      fontSize: 14,
+      backgroundColor: '#fff',
+      color: '#111827',
+      boxSizing: 'border-box'
+    },
+    badge: (active) => ({
+      display: 'inline-block',
+      padding: '4px 10px',
+      borderRadius: 999,
+      fontSize: 11,
+      fontWeight: 900,
+      background: active ? '#e8f5e9' : '#fee',
+      color: active ? '#2E7D32' : '#c62828',
+      border: `1px solid ${active ? '#a7d7ad' : '#fca'}`
+    })
+  }
+
+  if (loading) return <div style={{ padding: 30 }}>Cargando trabajadores...</div>
+
   return (
-    <div style={{ padding: 18, maxWidth: 1240, margin: '0 auto' }}>
-      <div
-        style={{
-          background: '#fff',
-          borderRadius: 16,
-          border: '1px solid #eef2f7',
-          boxShadow: '0 4px 22px rgba(16,24,40,0.08)',
-          padding: 18
-        }}
-      >
-        <h2 style={{ margin: 0, color: '#2E7D32' }}>Trabajadores</h2>
-        <p style={{ marginTop: 8, color: '#667085' }}>
-          (Placeholder) Aquí va tu panel de usuarios / asignaciones.
-        </p>
+    <div style={styles.container}>
+      <div style={styles.card}>
+        <div style={styles.header}>
+          <h2 style={styles.title}>Gestión de Trabajadores</h2>
+          <button style={styles.btn('primary')} onClick={() => setCreateOpen(true)}>
+            ➕ Crear Usuario
+          </button>
+        </div>
+        
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>ID</th>
+              <th style={styles.th}>Nombre</th>
+              <th style={styles.th}>Email</th>
+              <th style={styles.th}>Rol</th>
+              <th style={styles.th}>Estado</th>
+              <th style={styles.th}>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {usuarios.map((u) => (
+              <tr key={u.id}>
+                <td style={styles.td}>{u.id}</td>
+                <td style={styles.td}>{u.name || '--'}</td>
+                <td style={styles.td}>{u.email}</td>
+                <td style={styles.td}>
+                  <span style={{ 
+                    fontWeight: 900, 
+                    color: u.role === 'admin' ? '#E8B04A' : '#2E7D32' 
+                  }}>
+                    {u.role === 'admin' ? '👑 Admin' : '👷 Inspector'}
+                  </span>
+                </td>
+                <td style={styles.td}>
+                  <span style={styles.badge(u.active)}>
+                    {u.active ? '✅ Activo' : '❌ Inactivo'}
+                  </span>
+                </td>
+                <td style={styles.td}>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button style={styles.btn('outline')} onClick={() => openEdit(u)}>
+                      ✏️ Editar
+                    </button>
+                    <button 
+                      style={styles.btn(u.active ? 'danger' : 'primary')} 
+                      onClick={() => toggleActive(u)}
+                    >
+                      {u.active ? '🚫 Desactivar' : '✅ Activar'}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {usuarios.length === 0 && (
+              <tr>
+                <td colSpan={6} style={{ ...styles.td, textAlign: 'center', color: '#667085' }}>
+                  No hay usuarios registrados
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
+
+      {/* MODAL CREAR */}
+      {createOpen && (
+        <div style={styles.modalOverlay} onClick={(e) => e.target === e.currentTarget && setCreateOpen(false)}>
+          <div style={styles.modal}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>Crear Nuevo Usuario</h3>
+              <button style={styles.btn('gray')} onClick={() => setCreateOpen(false)}>✕</button>
+            </div>
+            
+            <form onSubmit={handleCreate}>
+              <div style={styles.modalBody}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Nombre completo *</label>
+                  <input
+                    style={styles.input}
+                    type="text"
+                    value={newUser.name}
+                    onChange={(e) => setNewUser(prev => ({ ...prev, name: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Email *</label>
+                  <input
+                    style={styles.input}
+                    type="email"
+                    value={newUser.email}
+                    onChange={(e) => setNewUser(prev => ({ ...prev, email: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Contraseña *</label>
+                  <input
+                    style={styles.input}
+                    type="password"
+                    value={newUser.password}
+                    onChange={(e) => setNewUser(prev => ({ ...prev, password: e.target.value }))}
+                    required
+                    minLength={6}
+                  />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Rol *</label>
+                  <select
+                    style={styles.select}
+                    value={newUser.role}
+                    onChange={(e) => setNewUser(prev => ({ ...prev, role: e.target.value }))}
+                    required
+                  >
+                    <option value="inspector">Inspector</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={styles.modalFooter}>
+                <button type="button" style={styles.btn('gray')} onClick={() => setCreateOpen(false)} disabled={saving}>
+                  Cancelar
+                </button>
+                <button type="submit" style={styles.btn('primary')} disabled={saving}>
+                  {saving ? 'Creando...' : 'Crear Usuario'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDITAR */}
+      {editOpen && editUser && (
+        <div style={styles.modalOverlay} onClick={(e) => e.target === e.currentTarget && setEditOpen(false)}>
+          <div style={styles.modal}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>Editar Usuario — {editUser.email}</h3>
+              <button style={styles.btn('gray')} onClick={() => setEditOpen(false)}>✕</button>
+            </div>
+            
+            <form onSubmit={handleEdit}>
+              <div style={styles.modalBody}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Nombre completo</label>
+                  <input
+                    style={styles.input}
+                    type="text"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                  />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Email</label>
+                  <input
+                    style={styles.input}
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                  />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Nueva contraseña (opcional)</label>
+                  <input
+                    style={styles.input}
+                    type="password"
+                    value={editForm.password}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="Dejar vacío para no cambiar"
+                  />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Rol</label>
+                  <select
+                    style={styles.select}
+                    value={editForm.role}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, role: e.target.value }))}
+                  >
+                    <option value="inspector">Inspector</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={styles.modalFooter}>
+                <button type="button" style={styles.btn('gray')} onClick={() => setEditOpen(false)} disabled={saving}>
+                  Cancelar
+                </button>
+                <button type="submit" style={styles.btn('primary')} disabled={saving}>
+                  {saving ? 'Guardando...' : 'Guardar Cambios'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 /** =========================
- *  COMPONENTE PRINCIPAL: PanelAdmin
+ *  COMPONENTE PRINCIPAL CON DROPDOWN
  *  ========================= */
 export default function PanelAdmin() {
   const router = useRouter()
   const [tab, setTab] = useState('inspecciones')
   const [loggingOut, setLoggingOut] = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
 
   const logout = async () => {
     setLoggingOut(true)
     try {
-      await fetch('api/auth/logout', { method: 'POST', credentials: 'include' })
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
     } finally {
       try { localStorage.removeItem('adminToken') } catch {}
       router.push('/login')
@@ -854,7 +1289,7 @@ export default function PanelAdmin() {
   }
 
   const styles = {
-    page: { minHeight: '100vh', background: '#f4f7f4' }, // ✅ CLARO
+    page: { minHeight: '100vh', background: '#f4f7f4' },
     wrapper: { maxWidth: 1240, margin: '0 auto', padding: 18 },
     tabsBar: {
       display: 'flex',
@@ -884,17 +1319,50 @@ export default function PanelAdmin() {
       fontWeight: 900,
       fontSize: 13
     }),
-    right: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
-    hint: { fontSize: 12, color: '#667085' },
-    logoutBtn: {
-      borderRadius: 12,
-      padding: '10px 12px',
-      fontSize: 12,
-      fontWeight: 900,
+    
+    userDropdown: {
+      position: 'relative',
+      display: 'inline-block'
+    },
+    userBtn: {
+      width: 42,
+      height: 42,
+      borderRadius: '50%',
+      background: '#E8B04A',
+      color: '#fff',
+      border: 'none',
       cursor: 'pointer',
-      border: '1px solid #e5e7eb',
+      fontSize: 18,
+      fontWeight: 900,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    dropdownMenu: {
+      position: 'absolute',
+      top: '50px',
+      right: 0,
       background: '#fff',
-      color: '#c62828'
+      border: '1px solid #eef2f7',
+      borderRadius: 12,
+      boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+      minWidth: 200,
+      padding: 8,
+      zIndex: 1000
+    },
+    menuItem: {
+      padding: '10px 14px',
+      cursor: 'pointer',
+      borderRadius: 8,
+      fontSize: 14,
+      color: '#374151',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10
+    },
+    logoutItem: {
+      color: '#c62828',
+      fontWeight: 900
     }
   }
 
@@ -912,11 +1380,32 @@ export default function PanelAdmin() {
             </button>
           </div>
 
-          <div style={styles.right}>
-            <div style={styles.hint}>Admin Dashboard — gestiona inspecciones y usuarios</div>
-            <button style={styles.logoutBtn} onClick={logout} disabled={loggingOut}>
-              {loggingOut ? 'Cerrando…' : 'Cerrar sesión'}
+          <div style={styles.userDropdown}>
+            <button 
+              style={styles.userBtn}
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+            >
+              U
             </button>
+
+            {dropdownOpen && (
+              <div style={styles.dropdownMenu}>
+                <div 
+                  style={{ ...styles.menuItem, padding: '8px 14px', borderBottom: '1px solid #eef2f7', marginBottom: 6 }}
+                >
+                  <span style={{ fontSize: 12, color: '#667085' }}>Admin Dashboard</span>
+                </div>
+                
+                <div 
+                  style={{ ...styles.menuItem, ...styles.logoutItem }}
+                  onClick={logout}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#fee'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  🚪 {loggingOut ? 'Cerrando…' : 'Cerrar sesión'}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
