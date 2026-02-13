@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import SincronizarGoogleSheets from './SincronizarGoogleSheets'
+import TablaInspecciones from './TablaInspecciones'
 
 /** Helpers */
 function safeStr(v) {
@@ -79,6 +81,10 @@ function InspeccionesTab() {
   useEffect(() => {
     fetchDatos()
   }, [])
+
+  const handleSyncSuccess = () => {
+    fetchDatos() // Recargar historial después de sincronizar
+  }
 
   const pdfEstaOk = (i) => !!i.pdf_url
 
@@ -219,7 +225,6 @@ function InspeccionesTab() {
     
     let m = detail.metrics
     
-    // 🔧 FIX: Parsear correctamente
     try {
       if (typeof m === 'string') {
         m = JSON.parse(m)
@@ -228,7 +233,6 @@ function InspeccionesTab() {
       m = { values: {} }
     }
 
-    // 🔧 Asegurar que values existe
     const values = m?.values || {}
 
     setMetricsDraft({
@@ -462,10 +466,35 @@ function InspeccionesTab() {
 
   return (
     <div style={styles.container}>
+      {/* 📊 NUEVO: Google Sheets */}
+      <SincronizarGoogleSheets onSyncSuccess={handleSyncSuccess} />
+
+      {/* 📋 Tabla editable */}
+      <TablaInspecciones onSyncSuccess={handleSyncSuccess} />
+
+      {/* 📊 Estadísticas */}
+      <div style={styles.statsGrid}>
+        <div style={styles.statCard}>
+          <div style={styles.statLabel}>Total inspecciones</div>
+          <div style={styles.statValue}>{metricas.total}</div>
+        </div>
+        <div style={styles.statCard}>
+          <div style={styles.statLabel}>Brix Promedio (metrics)</div>
+          <div style={styles.statValue}>
+            {metricas.brixPromedio === '--' ? '--' : `${metricas.brixPromedio}°`}
+          </div>
+        </div>
+        <div style={styles.statCard}>
+          <div style={styles.statLabel}>PDF pendientes</div>
+          <div style={styles.statValue}>{metricas.pdfPendientes}</div>
+        </div>
+      </div>
+
+      {/* 📋 Historial */}
       <div style={styles.topRow}>
         <div>
-          <h2 style={styles.title}>Panel Administrativo — Inspecciones</h2>
-          <p style={styles.subtitle}>Historial, detalle, edición de cabecera y métricas</p>
+          <h2 style={styles.title}>📊 Historial de Inspecciones</h2>
+          <p style={styles.subtitle}>Todas las inspecciones registradas</p>
         </div>
 
         <div style={styles.filtersRow}>
@@ -488,23 +517,6 @@ function InspeccionesTab() {
           <button style={styles.btn('outline')} onClick={fetchDatos}>
             Refrescar
           </button>
-        </div>
-      </div>
-
-      <div style={styles.statsGrid}>
-        <div style={styles.statCard}>
-          <div style={styles.statLabel}>Total inspecciones</div>
-          <div style={styles.statValue}>{metricas.total}</div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statLabel}>Brix Promedio (metrics)</div>
-          <div style={styles.statValue}>
-            {metricas.brixPromedio === '--' ? '--' : `${metricas.brixPromedio}°`}
-          </div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statLabel}>PDF pendientes</div>
-          <div style={styles.statValue}>{metricas.pdfPendientes}</div>
         </div>
       </div>
 
@@ -812,19 +824,17 @@ function InspeccionesTab() {
 }
 
 /** =========================
- *  TAB: TRABAJADORES (🔧 CORREGIDO)
+ *  TAB: TRABAJADORES
  *  ========================= */
 function TrabajadoresTab() {
   const [usuarios, setUsuarios] = useState([])
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('')
   
-  // Modales
   const [createOpen, setCreateOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [editUser, setEditUser] = useState(null)
   
-  // Form crear
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
@@ -832,7 +842,6 @@ function TrabajadoresTab() {
     role: 'inspector'
   })
   
-  // Form editar
   const [editForm, setEditForm] = useState({
     name: '',
     email: '',
@@ -847,8 +856,6 @@ function TrabajadoresTab() {
     setErrorMsg('')
     
     try {
-      console.log('📡 Iniciando petición a /api/users...')
-      
       const res = await fetch('/api/users', { 
         method: 'GET',
         credentials: 'include',
@@ -857,12 +864,8 @@ function TrabajadoresTab() {
         }
       })
       
-      console.log('📡 Response status:', res.status, res.statusText)
-      
-      // 🔧 Manejar diferentes códigos de error
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ msg: 'Error desconocido' }))
-        console.error('❌ Error en respuesta:', errorData)
         
         if (res.status === 401 || res.status === 403) {
           setErrorMsg('No tienes permisos para ver esta sección. Debes ser administrador.')
@@ -875,24 +878,18 @@ function TrabajadoresTab() {
       }
       
       const data = await res.json()
-      console.log('📋 Data recibida:', data)
-      console.log('📋 Tipo de data:', typeof data, Array.isArray(data))
       
       if (!Array.isArray(data)) {
-        console.warn('⚠️ La respuesta no es un array:', data)
         setErrorMsg('Formato de respuesta inválido del servidor')
         setUsuarios([])
         return
       }
       
-      // 🔧 FIX CRÍTICO: Normalizar el campo active
-      // SQL Server devuelve 1/0, necesitamos convertirlo a boolean
       const normalizedUsers = data.map(u => ({
         ...u,
-        active: Boolean(u.active) // Convierte 1 → true, 0 → false
+        active: Boolean(u.active)
       }))
       
-      console.log('✅ Usuarios normalizados:', normalizedUsers.length, normalizedUsers)
       setUsuarios(normalizedUsers)
       
     } catch (err) {
@@ -1356,7 +1353,7 @@ function TrabajadoresTab() {
 }
 
 /** =========================
- *  COMPONENTE PRINCIPAL CON DROPDOWN
+ *  COMPONENTE PRINCIPAL
  *  ========================= */
 export default function PanelAdmin() {
   const router = useRouter()
@@ -1489,7 +1486,7 @@ export default function PanelAdmin() {
                   onMouseEnter={(e) => e.currentTarget.style.background = '#fee'}
                   onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                 >
-                    {loggingOut ? 'Cerrando…' : 'Cerrar sesión'}
+                  {loggingOut ? 'Cerrando…' : 'Cerrar sesión'}
                 </div>
               </div>
             )}
