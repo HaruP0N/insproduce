@@ -7,7 +7,6 @@ export async function PUT(req, context) {
   if (!v.ok) return NextResponse.json({ msg: v.msg }, { status: v.status })
 
   try {
-    // 🔧 await params
     const params = await context.params
     const id = Number(params?.id)
     
@@ -30,15 +29,20 @@ export async function PUT(req, context) {
 
     const metricsJson = JSON.stringify(metricsObj)
 
-    // 🔧 INVALIDAR PDF al editar métricas
+    // Actualizar métricas
     await query(
       `UPDATE inspections 
-       SET metrics = @metrics,
-           pdf_url = NULL,
-           pdf_hash = NULL,
-           updated_at = GETDATE()
+       SET metrics = @metrics, updated_at = GETDATE()
        WHERE id = @id`,
       { id, metrics: metricsJson }
+    )
+
+    // Invalidar PDF (está en tabla separada inspection_pdfs)
+    await query(
+      `UPDATE inspection_pdfs 
+       SET status = 'PENDING', pdf_url = NULL, pdf_hash = NULL, updated_at = GETDATE()
+       WHERE inspection_id = @id`,
+      { id }
     )
 
     return NextResponse.json({ ok: true, id })

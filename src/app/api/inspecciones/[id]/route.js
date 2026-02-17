@@ -7,10 +7,9 @@ export async function GET(req, context) {
   if (!v.ok) return NextResponse.json({ msg: v.msg }, { status: v.status })
 
   try {
-    // 🔧 await params
     const params = await context.params
     const id = Number(params?.id)
-    
+
     if (!Number.isInteger(id) || id <= 0) {
       return NextResponse.json({ msg: 'ID inválido' }, { status: 400 })
     }
@@ -32,11 +31,19 @@ export async function GET(req, context) {
 
     const insp = r.recordset[0]
 
+    // 🔧 Normalizar metrics: siempre retornar { values: {...} }
     let metrics = insp.metrics
     try {
       if (typeof metrics === 'string') metrics = JSON.parse(metrics)
     } catch {
       metrics = {}
+    }
+
+    // Si metrics es un objeto plano SIN capa "values", envolverlo
+    if (metrics && typeof metrics === 'object' && !metrics.values) {
+      metrics = { values: metrics }
+    } else if (!metrics || typeof metrics !== 'object') {
+      metrics = { values: {} }
     }
 
     return NextResponse.json({ ...insp, metrics })
@@ -51,10 +58,9 @@ export async function PUT(req, context) {
   if (!v.ok) return NextResponse.json({ msg: v.msg }, { status: v.status })
 
   try {
-    // 🔧 await params
     const params = await context.params
     const id = Number(params?.id)
-    
+
     if (!Number.isInteger(id) || id <= 0) {
       return NextResponse.json({ msg: 'ID inválido' }, { status: 400 })
     }
@@ -62,16 +68,10 @@ export async function PUT(req, context) {
     const body = await req.json().catch(() => ({}))
 
     const {
-      producer,
-      lot,
-      variety,
-      caliber,
-      packaging_code,
-      packaging_type,
-      packaging_date
+      producer, lot, variety, caliber,
+      packaging_code, packaging_type, packaging_date
     } = body
 
-    // 🔧 INVALIDAR PDF al editar cabecera
     await query(
       `UPDATE inspections 
        SET producer = @producer,

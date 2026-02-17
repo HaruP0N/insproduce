@@ -1,26 +1,21 @@
+// src/app/api/inspecciones/route.js
 import { NextResponse } from 'next/server'
-import { query } from '../../../lib/db/mssql'
-import { verifyTokenFromRequest } from '../../../lib/auth/verifyToken'
-
-function safeJsonParse(s, fallback) {
-  try {
-    if (s === null || s === undefined) return fallback
-    if (typeof s === 'object') return s
-    return JSON.parse(String(s))
-  } catch {
-    return fallback
-  }
-}
+import { verifyTokenFromRequest } from '@/lib/auth/verifyToken'
+import { query } from '@/lib/db/mssql'
 
 function allowAdminOrInspector(role) {
-  return role === 'admin' || role === 'inspector'
+  return ['admin', 'inspector'].includes(role)
+}
+
+function safeJsonParse(str, fallback) {
+  try { return JSON.parse(str) } catch { return fallback }
 }
 
 export async function POST(req) {
   const v = verifyTokenFromRequest(req)
   if (!v.ok) return NextResponse.json({ msg: v.msg }, { status: v.status })
 
-  if (!allowAdminOrInspector(v.payload?.role)) {
+  if (!allowAdminOrInspector(v.user?.role)) {
     return NextResponse.json({ msg: 'Permiso denegado' }, { status: 403 })
   }
 
@@ -40,7 +35,7 @@ export async function POST(req) {
       return NextResponse.json({ msg: 'commodity_id o commodity_code es obligatorio' }, { status: 400 })
     }
 
-    const created_by_user_id = v.payload?.id ? Number(v.payload.id) : null
+    const created_by_user_id = v.user?.id ? Number(v.user.id) : null
 
     const producer = body.producer ? String(body.producer) : null
     const lot = body.lot ? String(body.lot) : null
@@ -49,7 +44,7 @@ export async function POST(req) {
 
     const packaging_code = body.packaging_code ? String(body.packaging_code) : null
     const packaging_type = body.packaging_type ? String(body.packaging_type) : null
-    const packaging_date = body.packaging_date ? String(body.packaging_date) : null // 'YYYY-MM-DD'
+    const packaging_date = body.packaging_date ? String(body.packaging_date) : null
 
     const net_weight = body.net_weight !== undefined && body.net_weight !== null ? Number(body.net_weight) : null
     const brix_avg = body.brix_avg !== undefined && body.brix_avg !== null ? Number(body.brix_avg) : null
@@ -60,10 +55,13 @@ export async function POST(req) {
 
     const notes = body.notes !== undefined ? String(body.notes) : null
 
-    // metrics JSON (NVARCHAR(MAX))
+    // metrics JSON
     const metricsObj =
       typeof body.metrics === 'string' ? safeJsonParse(body.metrics, {}) : (body.metrics || {})
     const metrics = JSON.stringify(metricsObj || {})
+
+    // Capturar assignment_id si viene
+    const assignment_id = body.assignment_id ? Number(body.assignment_id) : null
 
     const ins = await query(
       `INSERT INTO inspections (
@@ -97,12 +95,35 @@ export async function POST(req) {
 
     const inspectionId = ins.recordset?.[0]?.id
 
-    // crear registro pdf status (PENDING) opcional (igual que tu V2)
+    // Si viene de una asignación, marcarla como completada
+    if (assignment_id) {
+      console.log(`✅ Marcando asignación ${assignment_id} como completada`)
+
+      await query(
+        `UPDATE assignments 
+         SET status = 'completada',
+             notes_admin = CONCAT(
+               ISNULL(notes_admin, ''), 
+               ' [Completada - Inspección ID: ', 
+               @inspection_id, 
+               ']'
+             )
+         WHERE id = @assignment_id`,
+        {
+          assignment_id,
+          inspection_id: inspectionId
+        }
+      )
+    }
+
+    // crear registro pdf status (PENDING)
     await query(
       `IF NOT EXISTS (SELECT 1 FROM inspection_pdfs WHERE inspection_id=@inspection_id)
        INSERT INTO inspection_pdfs (inspection_id, status) VALUES (@inspection_id, 'PENDING')`,
       { inspection_id: inspectionId }
     )
+
+    console.log(`✅ Inspección ${inspectionId} creada exitosamente`)
 
     return NextResponse.json({ ok: true, id: inspectionId })
   } catch (e) {

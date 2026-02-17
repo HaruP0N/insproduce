@@ -1,11 +1,11 @@
-// src/app/api/google-sheets/sync/route.js
+// src/app/api/google-sheets/sync/route.js (REEMPLAZAR COMPLETO)
 import { NextResponse } from 'next/server'
 import { verifyTokenFromCookies } from '@/lib/auth/verifyToken'
 import { query } from '@/lib/db/mssql'
 import { sheetsClient } from '@/lib/googleSheets'
 
 export async function POST(req) {
-  console.log('🔄 [POST /api/google-sheets/sync] Iniciando sincronización...')
+  console.log('🔄 [POST /api/google-sheets/sync] Iniciando sincronización bidireccional...')
   
   const v = verifyTokenFromCookies(req)
   
@@ -28,7 +28,7 @@ export async function POST(req) {
 
     console.log('📊 Leyendo Google Sheet:', spreadsheetId)
 
-    // Leer todas las filas
+    // Leer todas las filas del Sheet
     const rows = await sheetsClient.readSheet(spreadsheetId)
     
     if (!rows || rows.length === 0) {
@@ -37,22 +37,104 @@ export async function POST(req) {
       }, { status: 400 })
     }
 
-    console.log('📋 Filas leídas:', rows.length)
+    console.log('📋 Filas leídas del Sheet:', rows.length)
 
-    // Parsear filas a objetos
-    const inspecciones = sheetsClient.parseRows(rows)
+    // ═══════════════════════════════════════════════════════════
+    // PASO 1: Sincronizar BD → Sheet (nuevas asignaciones)
+    // ═══════════════════════════════════════════════════════════
     
-    console.log('📦 Inspecciones parseadas:', inspecciones.length)
+    console.log('📤 PASO 1: Sincronizando BD → Sheet...')
+    
+    // Obtener todas las asignaciones pendientes de la BD que NO estén en el Sheet
+    const assignmentsResult = await query(
+      `SELECT 
+        a.id,
+        a.producer,
+        a.lot,
+        a.variety,
+        a.status,
+        u.email as inspector_email
+       FROM assignments a
+       INNER JOIN users u ON a.user_id = u.id
+       WHERE a.status = 'pendiente'
+       ORDER BY a.created_at ASC`
+    )
+
+    const assignmentsFromDB = assignmentsResult.recordset || []
+    console.log('📦 Asignaciones en BD:', assignmentsFromDB.length)
+
+    // Parsear el Sheet actual
+    const sheetData = sheetsClient.parseRows(rows)
+    
+    // Identificar asignaciones que están en BD pero NO en Sheet
+    const newRowsToAdd = []
+    
+    for (const assignment of assignmentsFromDB) {
+      // Buscar si ya existe en el Sheet (por lote)
+      const existsInSheet = sheetData.find(row => 
+        row.Lote === assignment.lot && row.Productor === assignment.producer
+      )
+      
+      if (!existsInSheet) {
+        console.log(`➕ Nueva fila para Sheet: ${assignment.lot}`)
+        newRowsToAdd.push({
+          producer: assignment.producer,
+          lot: assignment.lot,
+          variety: assignment.variety || '',
+          commodity: '', // No lo tenemos en assignments
+          inspector: assignment.inspector_email,
+          estado: 'Pendiente',
+          id: assignment.id.toString()
+        })
+      }
+    }
+
+    // Agregar las nuevas filas al Sheet
+    if (newRowsToAdd.length > 0) {
+      console.log(`📝 Agregando ${newRowsToAdd.length} filas nuevas al Sheet...`)
+      
+      const nextRow = rows.length + 1
+      const newRowsData = newRowsToAdd.map(row => [
+        row.producer,
+        row.lot,
+        row.variety,
+        row.commodity,
+        row.inspector,
+        row.estado,
+        row.id
+      ])
+
+      await sheetsClient.writeSheet(
+        spreadsheetId,
+        `A${nextRow}:G${nextRow + newRowsData.length - 1}`,
+        newRowsData
+      )
+      
+      console.log('✅ Filas agregadas al Sheet')
+    } else {
+      console.log('ℹ️ No hay filas nuevas para agregar al Sheet')
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PASO 2: Sincronizar Sheet → BD (importar nuevas)
+    // ═══════════════════════════════════════════════════════════
+    
+    console.log('📥 PASO 2: Sincronizando Sheet → BD...')
+
+    // Recargar el Sheet (por si agregamos filas)
+    const updatedRows = await sheetsClient.readSheet(spreadsheetId)
+    const inspecciones = sheetsClient.parseRows(updatedRows)
+    
+    console.log('📦 Inspecciones parseadas del Sheet:', inspecciones.length)
 
     let nuevas = 0
     let actualizadas = 0
     let errores = 0
     const updates = []
 
-    // Procesar cada inspección
+    // Procesar cada inspección del Sheet
     for (const insp of inspecciones) {
       try {
-        // Mapear columnas (flexible)
         const producer = insp['Productor'] || insp['productor'] || insp['Producer'] || ''
         const lot = insp['Lote'] || insp['lote'] || insp['Lot'] || ''
         const variety = insp['Variedad'] || insp['variedad'] || insp['Variety'] || ''
@@ -67,9 +149,9 @@ export async function POST(req) {
           continue
         }
 
-        // Si ya tiene ID de inspección y estado "Importada", skip
-        if (idInspeccion && estado === 'Importada') {
-          console.log(`⏭️ Fila ${insp._rowNumber}: Ya importada (ID: ${idInspeccion})`)
+        // Si ya tiene ID y estado "Importada" o "Pendiente", skip
+        if (idInspeccion && (estado === 'Importada' || estado === 'Pendiente')) {
+          console.log(`⏭️ Fila ${insp._rowNumber}: Ya procesada (ID: ${idInspeccion})`)
           continue
         }
 
@@ -88,46 +170,40 @@ export async function POST(req) {
           }
         }
 
-        // Insertar inspección
+        // Insertar en assignments
         const result = await query(
-          `INSERT INTO inspections (
-            producer, lot, variety, commodity_code,
-            assigned_to_user_id, created_by_user_id,
-            status
+          `INSERT INTO assignments (
+            user_id, producer, lot, variety, status, created_at, notes_admin
           )
           OUTPUT INSERTED.id
           VALUES (
-            @producer, @lot, @variety, @commodity_code,
-            @assigned_to_user_id, @created_by_user_id,
-            'pending'
+            @user_id, @producer, @lot, @variety, 'pendiente', GETUTCDATE(), @notes
           )`,
           {
+            user_id: inspectorId,
             producer: producer.trim(),
             lot: lot.trim(),
-            variety: variety.trim(),
-            commodity_code: commodity.trim(),
-            assigned_to_user_id: inspectorId,
-            created_by_user_id: v.user.id
+            variety: variety?.trim() || null,
+            notes: `Commodity: ${commodity || 'N/A'}`
           }
         )
 
-        const newInspectionId = result.recordset[0].id
+        const newAssignmentId = result.recordset[0].id
 
-        console.log(`✅ [${nuevas + 1}] Creada: ${lot} - ${producer} (ID: ${newInspectionId})`)
+        console.log(`✅ [${nuevas + 1}] Creada: ${lot} - ${producer} (ID: ${newAssignmentId})`)
 
         // Preparar actualización del Sheet
-        // Columnas: Productor | Lote | Variedad | Commodity | Inspector | Estado | ID Inspección
         const estadoCol = 6  // Columna F
         const idCol = 7      // Columna G
 
         updates.push({
           range: `${sheetsClient.numberToColumn(estadoCol)}${insp._rowNumber}`,
-          values: [['Importada']]
+          values: [['Pendiente']]
         })
 
         updates.push({
           range: `${sheetsClient.numberToColumn(idCol)}${insp._rowNumber}`,
-          values: [[newInspectionId]]
+          values: [[newAssignmentId]]
         })
 
         nuevas++
@@ -136,7 +212,6 @@ export async function POST(req) {
         console.error(`❌ Error en fila ${insp._rowNumber}:`, err.message)
         errores++
 
-        // Marcar error en el Sheet
         const estadoCol = 6
         updates.push({
           range: `${sheetsClient.numberToColumn(estadoCol)}${insp._rowNumber}`,
@@ -152,10 +227,16 @@ export async function POST(req) {
       console.log('✅ Sheet actualizado')
     }
 
-    console.log(`✅ Sincronización completada: ${nuevas} nuevas, ${actualizadas} actualizadas, ${errores} errores`)
+    console.log(`✅ Sincronización completada:`)
+    console.log(`   - ${newRowsToAdd.length} filas agregadas al Sheet (BD → Sheet)`)
+    console.log(`   - ${nuevas} asignaciones nuevas importadas (Sheet → BD)`)
+    console.log(`   - ${actualizadas} actualizadas`)
+    console.log(`   - ${errores} errores`)
 
     return NextResponse.json({
-      msg: 'Sincronización completada',
+      msg: 'Sincronización bidireccional completada',
+      bd_to_sheet: newRowsToAdd.length,
+      sheet_to_bd: nuevas,
       nuevas,
       actualizadas,
       errores,

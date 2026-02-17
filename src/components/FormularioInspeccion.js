@@ -2,27 +2,30 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { getToken } from '@/lib/auth/clientToken'
 
 export default function FormularioInspeccion() {
   const router = useRouter()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
 
-  const [booting, setBooting] = useState(true)     // validando sesión
-  const [user, setUser] = useState(null)           // {id,email,role}
-  const [token, setTokenState] = useState('')      // token desde localStorage
-
+  const [booting, setBooting] = useState(true)
+  const [user, setUser] = useState(null)
+  const [token, setTokenState] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // commodities + template
+  // 🆕 Estado para asignación
+  const [assignmentId, setAssignmentId] = useState(null)
+  const [assignmentData, setAssignmentData] = useState(null)
+  const [isFromAssignment, setIsFromAssignment] = useState(false)
+
   const [commodities, setCommodities] = useState([])
   const [commodityCode, setCommodityCode] = useState('')
   const [template, setTemplate] = useState(null)
   const [fields, setFields] = useState([])
-  const [values, setValues] = useState({}) // key -> value
+  const [values, setValues] = useState({})
 
-  // cabecera (igual que tu backend nuevo)
   const [header, setHeader] = useState({
     producer: '',
     lot: '',
@@ -39,26 +42,17 @@ export default function FormularioInspeccion() {
     notes: ''
   })
 
-  // -----------------------
-  // 1) bootstrap: valida sesión por cookie (/api/auth/me)
-  //    y además lee token desde localStorage (para fetch con Bearer)
-  // -----------------------
+  // Bootstrap sesión
   useEffect(() => {
     let alive = true
 
     const run = async () => {
       setBooting(true)
 
-      // lee token del localStorage (para endpoints protegidos por Bearer)
       const t = getToken()
       if (alive) setTokenState(t)
 
       try {
-        // /api/auth/me usa verifyTokenFromRequest => OJO:
-        // eso lee Authorization header, NO cookie.
-        // Entonces acá hacemos:
-        // - si tenemos token localStorage => lo mandamos por Authorization
-        // - si no, igual intentamos sin header (por si después migras verifyTokenFromRequest a cookies)
         const r = await fetch('/api/auth/me')
         const data = await r.json().catch(() => ({}))
 
@@ -66,7 +60,6 @@ export default function FormularioInspeccion() {
 
         if (alive) setUser(data.user)
       } catch (e) {
-        // si no hay sesión válida, manda a login
         const next = pathname || '/ops'
         router.replace(`/login?next=${encodeURIComponent(next)}`)
         return
@@ -81,15 +74,63 @@ export default function FormularioInspeccion() {
     }
   }, [router, pathname])
 
-  // headers auth para el resto de endpoints
   const authHeaders = useMemo(() => {
     if (!token) return {}
     return { Authorization: 'Bearer ' + token }
   }, [token])
 
-  // -----------------------
-  // 2) cargar commodities
-  // -----------------------
+  // 🆕 Detectar assignment_id en la URL
+  useEffect(() => {
+    const aId = searchParams.get('assignment_id')
+    if (aId) {
+      setAssignmentId(aId)
+      setIsFromAssignment(true)
+    }
+  }, [searchParams])
+
+  // 🆕 Cargar datos de la asignación
+  useEffect(() => {
+    if (!assignmentId || !token) return
+    
+    let alive = true
+
+    const loadAssignment = async () => {
+      try {
+        const res = await fetch(`/api/assignments/${assignmentId}`, {
+          credentials: 'include'
+        })
+        
+        const data = await res.json()
+        
+        if (!res.ok) throw new Error(data?.msg || 'Error al cargar asignación')
+        
+        if (!alive) return
+        
+        console.log('✅ Asignación cargada:', data)
+        setAssignmentData(data)
+        
+        // Pre-llenar header con datos de la asignación
+        setHeader(prev => ({
+          ...prev,
+          producer: data.producer || '',
+          lot: data.lot || '',
+          variety: data.variety || ''
+        }))
+        
+      } catch (err) {
+        console.error('Error loading assignment:', err)
+        alert('⚠️ No se pudieron cargar los datos de la asignación')
+      }
+    }
+
+    loadAssignment()
+    
+    return () => {
+      alive = false
+    }
+  }, [assignmentId, token])
+
+  // Cargar commodities
   useEffect(() => {
     let alive = true
 
@@ -114,9 +155,7 @@ export default function FormularioInspeccion() {
     }
   }, [token, authHeaders])
 
-  // -----------------------
-  // 3) cargar template por commodity
-  // -----------------------
+  // Cargar template
   useEffect(() => {
     let alive = true
     if (!commodityCode) return
@@ -128,7 +167,6 @@ export default function FormularioInspeccion() {
         setFields([])
         setValues({})
 
-        // 🔧 CORREGIDO: agregamos /code/ en la ruta
         const res = await fetch(`/api/metric-templates/code/${commodityCode}`, { 
           headers: authHeaders 
         })
@@ -140,7 +178,6 @@ export default function FormularioInspeccion() {
         setTemplate(data.template || null)
         setFields(Array.isArray(data.fields) ? data.fields : [])
 
-        // init values
         const init = {}
         ;(data.fields || []).forEach((f) => {
           init[f.key] = ''
@@ -222,26 +259,23 @@ export default function FormularioInspeccion() {
     try {
       const payload = {
         commodity_code: commodityCode,
-
         producer: header.producer || null,
         lot: header.lot || null,
         variety: header.variety || null,
         caliber: header.caliber || null,
-
         packaging_code: header.packaging_code || null,
         packaging_type: header.packaging_type || null,
         packaging_date: header.packaging_date || null,
-
         net_weight: header.net_weight === '' ? null : Number(header.net_weight),
         brix_avg: header.brix_avg === '' ? null : Number(header.brix_avg),
         temp_water: header.temp_water === '' ? null : Number(header.temp_water),
         temp_ambient: header.temp_ambient === '' ? null : Number(header.temp_ambient),
         temp_pulp: header.temp_pulp === '' ? null : Number(header.temp_pulp),
-
         notes: header.notes || null,
-
-        // acá mandamos SOLO las values dinámicas (tu backend ya las serializa)
-        metrics: values
+        metrics: values,
+        
+        // 🆕 Si viene de asignación, incluir el ID
+        assignment_id: assignmentId || null
       }
 
       const res = await fetch('/api/inspecciones', {
@@ -256,30 +290,35 @@ export default function FormularioInspeccion() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.msg || 'Error creando inspección')
 
-      alert(`✓ Inspección guardada (ID: ${data.id}). PDF: PENDING`)
+      alert(`✅ Inspección guardada (ID: ${data.id})`)
 
-      // opcional: limpiar formulario, dejar commodity igual
-      setHeader((prev) => ({
-        ...prev,
-        producer: '',
-        lot: '',
-        variety: '',
-        caliber: '',
-        packaging_code: '',
-        packaging_type: '',
-        packaging_date: '',
-        net_weight: '',
-        brix_avg: '',
-        temp_water: '',
-        temp_ambient: '',
-        temp_pulp: '',
-        notes: ''
-      }))
-      setValues((prev) => {
-        const cleared = {}
-        Object.keys(prev || {}).forEach((k) => (cleared[k] = ''))
-        return cleared
-      })
+      // 🆕 Si venía de asignación, volver al dashboard del inspector
+      if (isFromAssignment) {
+        router.push('/inspector')
+      } else {
+        // Limpiar formulario
+        setHeader((prev) => ({
+          ...prev,
+          producer: '',
+          lot: '',
+          variety: '',
+          caliber: '',
+          packaging_code: '',
+          packaging_type: '',
+          packaging_date: '',
+          net_weight: '',
+          brix_avg: '',
+          temp_water: '',
+          temp_ambient: '',
+          temp_pulp: '',
+          notes: ''
+        }))
+        setValues((prev) => {
+          const cleared = {}
+          Object.keys(prev || {}).forEach((k) => (cleared[k] = ''))
+          return cleared
+        })
+      }
     } catch (err) {
       console.error(err)
       alert(err?.message || 'Error al guardar inspección')
@@ -288,9 +327,15 @@ export default function FormularioInspeccion() {
     }
   }
 
-  // -----------------------
-  // UI states
-  // -----------------------
+  // 🆕 Botón volver atrás
+  const handleGoBack = () => {
+    if (isFromAssignment) {
+      router.push('/inspector')
+    } else {
+      router.back()
+    }
+  }
+
   if (booting) {
     return (
       <div style={{ padding: 24, fontFamily: 'Segoe UI, Roboto, sans-serif' }}>
@@ -299,7 +344,6 @@ export default function FormularioInspeccion() {
     )
   }
 
-  // si llegara acá sin user (por alguna razón), redirigimos
   if (!user) {
     return (
       <div style={{ padding: 24, fontFamily: 'Segoe UI, Roboto, sans-serif' }}>
@@ -308,7 +352,6 @@ export default function FormularioInspeccion() {
     )
   }
 
-  // si quieres forzar que solo inspector use este form:
   if (user.role !== 'inspector') {
     return (
       <div style={{ padding: 24, fontFamily: 'Segoe UI, Roboto, sans-serif' }}>
@@ -328,12 +371,48 @@ export default function FormularioInspeccion() {
           </p>
         </div>
 
+        {/* 🆕 Botón volver */}
+        <div style={{ padding: '16px 22px 0', borderBottom: '1px solid #eee' }}>
+          <button 
+            type="button"
+            onClick={handleGoBack}
+            style={styles.backButton}
+          >
+            ← Volver {isFromAssignment ? 'al Panel' : 'Atrás'}
+          </button>
+        </div>
+
         <form onSubmit={handleSubmit}>
-          {/* commodity */}
+          {/* 🆕 Sección de asignación (solo lectura) */}
+          {isFromAssignment && assignmentData && (
+            <div style={styles.assignmentSection}>
+              <div style={styles.assignmentHeader}>
+                <span style={styles.assignmentBadge}>✅ Asignación Pre-cargada</span>
+                <div style={styles.assignmentTitle}>Información ya completada por el Administrador</div>
+              </div>
+              
+              <div style={styles.assignmentGrid}>
+                <div style={styles.assignmentItem}>
+                  <div style={styles.assignmentLabel}>Productor</div>
+                  <div style={styles.assignmentValue}>{assignmentData.producer}</div>
+                </div>
+                <div style={styles.assignmentItem}>
+                  <div style={styles.assignmentLabel}>Lote</div>
+                  <div style={styles.assignmentValue}>{assignmentData.lot}</div>
+                </div>
+                <div style={styles.assignmentItem}>
+                  <div style={styles.assignmentLabel}>Variedad</div>
+                  <div style={styles.assignmentValue}>{assignmentData.variety || '--'}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Commodity */}
           <div style={styles.section}>
             <div style={styles.sectionTitle}>Selección de Producto</div>
 
-            <label style={styles.label}>Commodity</label>
+            <label style={styles.label}>COMMODITY</label>
             <select
               value={commodityCode}
               onChange={(e) => setCommodityCode(e.target.value)}
@@ -353,26 +432,47 @@ export default function FormularioInspeccion() {
             </div>
           </div>
 
-          {/* header */}
+          {/* Header */}
           <div style={styles.section}>
-            <div style={styles.sectionTitle}>Identificación del Lote</div>
+            <div style={styles.sectionTitle}>
+              {isFromAssignment ? '📝 Completar por el Inspector' : 'Identificación del Lote'}
+            </div>
 
             <div style={styles.grid}>
+              {/* 🆕 Campos bloqueados si vienen de asignación */}
               {[
-                ['producer', 'Productor', true, 'text'],
-                ['lot', 'Lote / Serie', true, 'text'],
-                ['variety', 'Variedad', false, 'text'],
+                ['producer', 'Productor', true, 'text', isFromAssignment],
+                ['lot', 'Lote / Serie', true, 'text', isFromAssignment],
+                ['variety', 'Variedad', false, 'text', isFromAssignment]
+              ].map(([k, label, req, type, readonly]) => (
+                <div key={k}>
+                  <label style={styles.label}>
+                    {label}
+                    {readonly && <span style={{ color: '#2E7D32', marginLeft: 6 }}>✓ Pre-cargado</span>}
+                  </label>
+                  <input
+                    type={type}
+                    name={k}
+                    value={header[k]}
+                    onChange={handleHeader}
+                    style={readonly ? styles.inputReadonly : styles.input}
+                    required={!!req}
+                    readOnly={readonly}
+                  />
+                </div>
+              ))}
+
+              {/* Resto de campos editables */}
+              {[
                 ['caliber', 'Calibre', false, 'text'],
                 ['packaging_code', 'Cod. Embalaje', false, 'text'],
                 ['packaging_type', 'Tipo Embalaje', false, 'text'],
                 ['packaging_date', 'Fecha Embalaje', false, 'date'],
-
                 ['net_weight', 'Peso neto', false, 'number'],
                 ['brix_avg', 'Brix prom.', false, 'number'],
                 ['temp_water', 'Temp agua', false, 'number'],
                 ['temp_ambient', 'Temp ambiente', false, 'number'],
                 ['temp_pulp', 'Temp pulpa', false, 'number'],
-
                 ['notes', 'Notas', false, 'text']
               ].map(([k, label, req, type]) => (
                 <div key={k}>
@@ -390,7 +490,7 @@ export default function FormularioInspeccion() {
             </div>
           </div>
 
-          {/* template fields */}
+          {/* Template fields */}
           <div style={styles.section}>
             <div style={styles.sectionTitle}>Parámetros (Template)</div>
 
@@ -415,7 +515,7 @@ export default function FormularioInspeccion() {
 
           <div style={{ padding: '0 22px 22px' }}>
             <button type="submit" disabled={loading} style={styles.button}>
-              {loading ? 'GUARDANDO...' : 'GUARDAR INSPECCIÓN'}
+              {loading ? 'GUARDANDO...' : 'GUARDAR Y FINALIZAR'}
             </button>
           </div>
         </form>
@@ -445,6 +545,64 @@ const styles = {
     padding: 24,
     textAlign: 'center',
     borderBottom: '6px solid #FFB300'
+  },
+  backButton: {
+    padding: '8px 16px',
+    backgroundColor: '#fff',
+    border: '2px solid #2E7D32',
+    borderRadius: 8,
+    color: '#2E7D32',
+    fontSize: 14,
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    marginBottom: 16
+  },
+  assignmentSection: {
+    backgroundColor: '#e8f5e9',
+    padding: 22,
+    borderBottom: '3px solid #2E7D32'
+  },
+  assignmentHeader: {
+    marginBottom: 16
+  },
+  assignmentBadge: {
+    display: 'inline-block',
+    padding: '6px 12px',
+    backgroundColor: '#2E7D32',
+    color: '#fff',
+    borderRadius: 6,
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 8
+  },
+  assignmentTitle: {
+    color: '#1b5e20',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginTop: 8
+  },
+  assignmentGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: 16
+  },
+  assignmentItem: {
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 8,
+    border: '1px solid #a5d6a7'
+  },
+  assignmentLabel: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#2E7D32',
+    textTransform: 'uppercase',
+    marginBottom: 4
+  },
+  assignmentValue: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#1b5e20'
   },
   section: {
     padding: 22,
@@ -479,6 +637,18 @@ const styles = {
     outlineColor: '#4CAF50',
     backgroundColor: '#ffffff',
     color: '#111827'
+  },
+  inputReadonly: {
+    width: '100%',
+    padding: 10,
+    borderRadius: 8,
+    border: '2px solid #a5d6a7',
+    boxSizing: 'border-box',
+    fontSize: 14,
+    backgroundColor: '#f1f8e9',
+    color: '#1b5e20',
+    fontWeight: 'bold',
+    cursor: 'not-allowed'
   },
   button: {
     width: '100%',
