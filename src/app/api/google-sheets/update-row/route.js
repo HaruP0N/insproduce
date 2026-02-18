@@ -28,24 +28,26 @@ export async function PUT(req) {
       }, { status: 400 })
     }
 
-    // Actualizar solo las primeras 5 columnas (no tocar Estado e ID)
+    // Actualizar columnas A-F (incluye Estado ahora)
+    // A: Productor | B: Lote | C: Variedad | D: Commodity | E: Inspector | F: Estado
     const rowData = [
       [
         data.producer || '',
         data.lot || '',
         data.variety || '',
         data.commodity || '',
-        data.inspector || ''
+        data.inspector || '',
+        data.estado || 'Pendiente'  // ← NUEVO: incluye estado
       ]
     ]
 
     await sheetsClient.writeSheet(
       spreadsheetId,
-      `A${rowNumber}:E${rowNumber}`,
+      `A${rowNumber}:F${rowNumber}`,  // ← CAMBIO: ahora incluye columna F
       rowData
     )
 
-    console.log(`✅ Fila ${rowNumber} actualizada`)
+    console.log(`✅ Fila ${rowNumber} actualizada (incluye estado: ${data.estado})`)
 
     return NextResponse.json({ 
       msg: 'Fila actualizada'

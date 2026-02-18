@@ -44,7 +44,7 @@ export default function PortalLogin() {
       setToken(data.token)
 
       if (data.role === 'admin') router.push('/admin')
-      if (data.role === 'inspector') router.push('/inspecciones/nueva')
+      if (data.role === 'inspector') router.push('/inspector')
     } catch (err) {
       alert(err?.message || 'No se pudo iniciar sesión')
     } finally {
