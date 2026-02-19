@@ -24,6 +24,7 @@ export async function GET(req) {
         a.producer,
         a.lot,
         a.variety,
+        a.commodity_code,
         a.status,
         a.notes_admin,
         u.id as inspector_id,

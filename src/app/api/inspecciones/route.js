@@ -1,133 +1,141 @@
 // src/app/api/inspecciones/route.js
 import { NextResponse } from 'next/server'
-import { verifyTokenFromRequest } from '@/lib/auth/verifyToken'
 import { query } from '@/lib/db/mssql'
-
-function allowAdminOrInspector(role) {
-  return ['admin', 'inspector'].includes(role)
-}
-
-function safeJsonParse(str, fallback) {
-  try { return JSON.parse(str) } catch { return fallback }
-}
+import { verifyTokenFromRequest } from '@/lib/auth/verifyToken'
 
 export async function POST(req) {
   const v = verifyTokenFromRequest(req)
   if (!v.ok) return NextResponse.json({ msg: v.msg }, { status: v.status })
 
-  if (!allowAdminOrInspector(v.user?.role)) {
-    return NextResponse.json({ msg: 'Permiso denegado' }, { status: 403 })
-  }
-
   try {
     const body = await req.json().catch(() => ({}))
+    const { 
+      commodity_code, producer, lot, variety, caliber,
+      packaging_code, packaging_type, packaging_date,
+      net_weight, brix_avg, temp_water, temp_ambient, temp_pulp,
+      notes, metrics, photos, assignment_id 
+    } = body
 
-    // commodity (puede venir commodity_id o commodity_code)
-    let commodity_id = body.commodity_id ? Number(body.commodity_id) : null
-
-    if (!commodity_id && body.commodity_code) {
-      const code = String(body.commodity_code).trim().toUpperCase()
-      const c = await query(`SELECT TOP 1 id FROM commodities WHERE code=@code`, { code })
-      commodity_id = c.recordset?.[0]?.id || null
+    if (!commodity_code) {
+      return NextResponse.json({ msg: 'commodity_code requerido' }, { status: 400 })
     }
 
-    if (!commodity_id) {
-      return NextResponse.json({ msg: 'commodity_id o commodity_code es obligatorio' }, { status: 400 })
+    // Buscar commodity
+    const cRes = await query(
+      `SELECT id FROM commodities WHERE UPPER(code) = @code AND active = 1`,
+      { code: commodity_code.toUpperCase() }
+    )
+
+    if (!cRes.recordset?.length) {
+      return NextResponse.json({ msg: `Commodity ${commodity_code} no encontrado` }, { status: 404 })
     }
 
-    const created_by_user_id = v.user?.id ? Number(v.user.id) : null
+    const commodityId = cRes.recordset[0].id
 
-    const producer = body.producer ? String(body.producer) : null
-    const lot = body.lot ? String(body.lot) : null
-    const variety = body.variety ? String(body.variety) : null
-    const caliber = body.caliber ? String(body.caliber) : null
+    // Crear metrics JSON
+    const metricsObj = {
+      template_id: null,
+      template_version: null,
+      values: metrics || {}
+    }
+    const metricsJson = JSON.stringify(metricsObj)
 
-    const packaging_code = body.packaging_code ? String(body.packaging_code) : null
-    const packaging_type = body.packaging_type ? String(body.packaging_type) : null
-    const packaging_date = body.packaging_date ? String(body.packaging_date) : null
-
-    const net_weight = body.net_weight !== undefined && body.net_weight !== null ? Number(body.net_weight) : null
-    const brix_avg = body.brix_avg !== undefined && body.brix_avg !== null ? Number(body.brix_avg) : null
-
-    const temp_water = body.temp_water !== undefined && body.temp_water !== null ? Number(body.temp_water) : null
-    const temp_ambient = body.temp_ambient !== undefined && body.temp_ambient !== null ? Number(body.temp_ambient) : null
-    const temp_pulp = body.temp_pulp !== undefined && body.temp_pulp !== null ? Number(body.temp_pulp) : null
-
-    const notes = body.notes !== undefined ? String(body.notes) : null
-
-    // metrics JSON
-    const metricsObj =
-      typeof body.metrics === 'string' ? safeJsonParse(body.metrics, {}) : (body.metrics || {})
-    const metrics = JSON.stringify(metricsObj || {})
-
-    // Capturar assignment_id si viene
-    const assignment_id = body.assignment_id ? Number(body.assignment_id) : null
-
-    const ins = await query(
-      `INSERT INTO inspections (
-        commodity_id, created_by_user_id,
-        producer, lot, variety, caliber,
-        packaging_code, packaging_type, packaging_date,
-        net_weight, brix_avg,
-        temp_water, temp_ambient, temp_pulp,
-        notes, metrics
-      )
-      OUTPUT INSERTED.id
-      VALUES (
-        @commodity_id, @created_by_user_id,
-        @producer, @lot, @variety, @caliber,
-        @packaging_code, @packaging_type, @packaging_date,
-        @net_weight, @brix_avg,
-        @temp_water, @temp_ambient, @temp_pulp,
-        @notes, @metrics
-      )`,
+    // Insertar inspección
+    const iRes = await query(
+      `INSERT INTO inspections 
+        (commodity_id, created_by_user_id, producer, lot, variety, caliber,
+         packaging_code, packaging_type, packaging_date, net_weight, brix_avg,
+         temp_water, temp_ambient, temp_pulp, notes, metrics)
+       OUTPUT inserted.id
+       VALUES 
+        (@commodity_id, @user_id, @producer, @lot, @variety, @caliber,
+         @packaging_code, @packaging_type, @packaging_date, @net_weight, @brix_avg,
+         @temp_water, @temp_ambient, @temp_pulp, @notes, @metrics)`,
       {
-        commodity_id,
-        created_by_user_id,
-        producer, lot, variety, caliber,
-        packaging_code, packaging_type, packaging_date,
-        net_weight, brix_avg,
-        temp_water, temp_ambient, temp_pulp,
-        notes,
-        metrics
+        commodity_id: commodityId,
+        user_id: v.user.id,
+        producer: producer || null,
+        lot: lot || null,
+        variety: variety || null,
+        caliber: caliber || null,
+        packaging_code: packaging_code || null,
+        packaging_type: packaging_type || null,
+        packaging_date: packaging_date || null,
+        net_weight: net_weight,
+        brix_avg: brix_avg,
+        temp_water: temp_water,
+        temp_ambient: temp_ambient,
+        temp_pulp: temp_pulp,
+        notes: notes || null,
+        metrics: metricsJson
       }
     )
 
-    const inspectionId = ins.recordset?.[0]?.id
+    const inspectionId = iRes.recordset[0].id
 
-    // Si viene de una asignación, marcarla como completada
-    if (assignment_id) {
-      console.log(`✅ Marcando asignación ${assignment_id} como completada`)
-
-      await query(
-        `UPDATE assignments 
-         SET status = 'completada',
-             notes_admin = CONCAT(
-               ISNULL(notes_admin, ''), 
-               ' [Completada - Inspección ID: ', 
-               @inspection_id, 
-               ']'
-             )
-         WHERE id = @assignment_id`,
-        {
-          assignment_id,
-          inspection_id: inspectionId
+    // Guardar fotos por métrica
+    if (photos && typeof photos === 'object') {
+      for (const [metricKey, urls] of Object.entries(photos)) {
+        if (Array.isArray(urls) && urls.length > 0) {
+          for (const url of urls) {
+            await query(
+              `INSERT INTO inspection_photos (inspection_id, metric_key, url, label)
+               VALUES (@inspection_id, @metric_key, @url, @label)`,
+              {
+                inspection_id: inspectionId,
+                metric_key: metricKey,
+                url: url,
+                label: metricKey // Puedes mejorar esto después
+              }
+            )
+          }
         }
+      }
+    }
+
+    // Si viene de assignment, actualizar status a completada
+    if (assignment_id) {
+      await query(
+        `UPDATE assignments SET status = 'completada' WHERE id = @id`,
+        { id: parseInt(assignment_id) }
       )
     }
 
-    // crear registro pdf status (PENDING)
+    // Crear entrada en inspection_pdfs
     await query(
-      `IF NOT EXISTS (SELECT 1 FROM inspection_pdfs WHERE inspection_id=@inspection_id)
-       INSERT INTO inspection_pdfs (inspection_id, status) VALUES (@inspection_id, 'PENDING')`,
-      { inspection_id: inspectionId }
+      `INSERT INTO inspection_pdfs (inspection_id, status) VALUES (@id, 'PENDING')`,
+      { id: inspectionId }
     )
-
-    console.log(`✅ Inspección ${inspectionId} creada exitosamente`)
 
     return NextResponse.json({ ok: true, id: inspectionId })
   } catch (e) {
     console.error('[POST /inspecciones]', e)
-    return NextResponse.json({ msg: 'Error creando inspección' }, { status: 500 })
+    return NextResponse.json({ msg: 'Error: ' + e.message }, { status: 500 })
+  }
+}
+
+// GET para historial (mantener tu código actual)
+export async function GET(req) {
+  const v = verifyTokenFromRequest(req)
+  if (!v.ok) return NextResponse.json({ msg: v.msg }, { status: v.status })
+
+  try {
+    const result = await query(
+      `SELECT 
+        i.id, i.created_at, i.updated_at, i.producer, i.lot, i.variety,
+        c.code AS commodity_code, c.name AS commodity_name,
+        p.pdf_url, p.status AS pdf_status
+       FROM inspections i
+       JOIN commodities c ON c.id = i.commodity_id
+       LEFT JOIN inspection_pdfs p ON p.inspection_id = i.id
+       WHERE i.created_by_user_id = @userId
+       ORDER BY i.created_at DESC`,
+      { userId: v.user.id }
+    )
+
+    return NextResponse.json(result.recordset || [])
+  } catch (e) {
+    console.error('[GET /inspecciones/historial]', e)
+    return NextResponse.json({ msg: 'Error: ' + e.message }, { status: 500 })
   }
 }

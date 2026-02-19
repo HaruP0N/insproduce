@@ -29,6 +29,7 @@ export async function GET(req) {
         producer, 
         lot, 
         variety,
+        commodity_code,
         status,
         user_id,
         notes_admin
@@ -48,8 +49,9 @@ export async function GET(req) {
       producer: row.producer,
       lot: row.lot,
       variety: row.variety,
+      commodity_code: row.commodity_code, // ← ACTUALIZADO
       status: row.status,
-      commodity_code: null, // assignments no tiene commodity
+      notes_admin: row.notes_admin,
       caliber: null,
       packaging_type: null
     })) || []
