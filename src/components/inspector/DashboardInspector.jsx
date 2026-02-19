@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 
 export default function DashboardInspector() {
@@ -189,6 +189,7 @@ export default function DashboardInspector() {
 function InspeccionesAsignadasTab() {
   const [inspecciones, setInspecciones] = useState([])
   const [loading, setLoading] = useState(true)
+  const [expandedProducer, setExpandedProducer] = useState(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -217,6 +218,19 @@ function InspeccionesAsignadasTab() {
     router.push(`/inspecciones/nueva?assignment_id=${id}`)
   }
 
+  // ← NUEVO: Agrupar por productor
+  const groupedByProducer = useMemo(() => {
+    const groups = {}
+    inspecciones.forEach(insp => {
+      const producer = insp.producer || 'Sin productor'
+      if (!groups[producer]) {
+        groups[producer] = []
+      }
+      groups[producer].push(insp)
+    })
+    return groups
+  }, [inspecciones])
+
   const styles = {
     container: { maxWidth: 1240, margin: '0 auto' },
     card: {
@@ -227,18 +241,21 @@ function InspeccionesAsignadasTab() {
       padding: 20
     },
     title: { margin: '0 0 8px', color: '#15803d', fontSize: 20, fontWeight: 900 },
-    grid: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-      gap: 14
-    },
-    inspCard: {
+    producerCard: {
       background: '#f8fafc',
       borderRadius: 12,
       padding: 16,
+      marginBottom: 12,
       border: '1px solid #e5e7eb',
       cursor: 'pointer',
       transition: 'all 0.15s ease'
+    },
+    inspCard: {
+      background: '#fff',
+      borderRadius: 8,
+      padding: 12,
+      marginTop: 8,
+      border: '1px solid #e5e7eb'
     },
     badge: {
       display: 'inline-block',
@@ -248,10 +265,11 @@ function InspeccionesAsignadasTab() {
       fontWeight: 900,
       background: '#fffbeb',
       color: '#92400e',
-      border: '1px solid #fcd34d'
+      border: '1px solid #fcd34d',
+      marginLeft: 8
     },
     btn: {
-      marginTop: 12,
+      marginTop: 8,
       width: '100%',
       padding: '10px',
       borderRadius: 10,
@@ -293,11 +311,12 @@ function InspeccionesAsignadasTab() {
             </div>
           </div>
         ) : (
-          <div style={styles.grid}>
-            {inspecciones.map((insp) => (
+          <div>
+            {/* ← NUEVO: Mostrar agrupado por productor */}
+            {Object.entries(groupedByProducer).map(([producer, inspList]) => (
               <div 
-                key={insp.id} 
-                style={styles.inspCard}
+                key={producer}
+                style={styles.producerCard}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.boxShadow = '0 4px 16px rgba(22,163,74,0.15)'
                   e.currentTarget.style.borderColor = '#16a34a'
@@ -307,37 +326,64 @@ function InspeccionesAsignadasTab() {
                   e.currentTarget.style.borderColor = '#e5e7eb'
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <strong style={{ fontSize: 16, color: '#111827' }}>
-                    {insp.lot || 'Sin lote'}
-                  </strong>
-                  <span style={styles.badge}>Pendiente</span>
-                </div>
-
-                <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 4, lineHeight: 1.6 }}>
-                  <div style={{ marginBottom: 4 }}>
-                    <span style={{ fontWeight: 600, color: '#374151' }}>Productor:</span> {insp.producer || '--'}
-                  </div>
-                  {insp.variety && (
-                    <div style={{ marginBottom: 4 }}>
-                      <span style={{ fontWeight: 600, color: '#374151' }}>Variedad:</span> {insp.variety}
-                    </div>
-                  )}
-                  {insp.notes_admin && (
-                    <div style={{ marginTop: 8, padding: 8, background: '#fffbeb', borderRadius: 8, fontSize: 12 }}>
-                      <strong style={{ color: '#92400e' }}>📝 Nota:</strong> {insp.notes_admin}
-                    </div>
-                  )}
-                </div>
-
-                <button 
-                  style={styles.btn}
-                  onClick={() => iniciarInspeccion(insp.id)}
-                  onMouseEnter={(e) => e.currentTarget.style.background = '#15803d'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = '#16a34a'}
+                {/* Header del productor */}
+                <div 
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                  onClick={() => setExpandedProducer(expandedProducer === producer ? null : producer)}
                 >
-                  🚀 Iniciar Inspección
-                </button>
+                  <div>
+                    <strong style={{ fontSize: 16, color: '#111827' }}>{producer}</strong>
+                    <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>
+                      {inspList.length} {inspList.length === 1 ? 'inspección pendiente' : 'inspecciones pendientes'}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 20, color: '#6b7280' }}>
+                    {expandedProducer === producer ? '▼' : '▶'}
+                  </span>
+                </div>
+
+                {/* Lista de inspecciones expandida */}
+                {expandedProducer === producer && (
+                  <div style={{ marginTop: 12 }}>
+                    {inspList.map(insp => (
+                      <div key={insp.id} style={styles.inspCard}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <strong style={{ fontSize: 14, color: '#111827' }}>
+                            {insp.lot || 'Sin lote'}
+                          </strong>
+                          <span style={styles.badge}>Pendiente</span>
+                        </div>
+
+                        <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 4, lineHeight: 1.6 }}>
+                          {insp.variety && (
+                            <div style={{ marginBottom: 4 }}>
+                              <span style={{ fontWeight: 600, color: '#374151' }}>Variedad:</span> {insp.variety}
+                            </div>
+                          )}
+                          {insp.commodity_code && (
+                            <div style={{ marginBottom: 4 }}>
+                              <span style={{ fontWeight: 600, color: '#374151' }}>Commodity:</span> {insp.commodity_code}
+                            </div>
+                          )}
+                          {insp.notes_admin && (
+                            <div style={{ marginTop: 8, padding: 8, background: '#fffbeb', borderRadius: 8, fontSize: 12 }}>
+                              <strong style={{ color: '#92400e' }}>📝 Nota:</strong> {insp.notes_admin}
+                            </div>
+                          )}
+                        </div>
+
+                        <button 
+                          style={styles.btn}
+                          onClick={() => iniciarInspeccion(insp.id)}
+                          onMouseEnter={(e) => e.currentTarget.style.background = '#15803d'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = '#16a34a'}
+                        >
+                          🚀 Iniciar Inspección
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

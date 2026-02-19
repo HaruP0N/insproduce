@@ -1,4 +1,4 @@
-// src/app/api/google-sheets/sync/route.js (REEMPLAZAR COMPLETO)
+// src/app/api/google-sheets/sync/route.js - VERSIÓN CORREGIDA
 import { NextResponse } from 'next/server'
 import { verifyTokenFromCookies } from '@/lib/auth/verifyToken'
 import { query } from '@/lib/db/mssql'
@@ -28,7 +28,6 @@ export async function POST(req) {
 
     console.log('📊 Leyendo Google Sheet:', spreadsheetId)
 
-    // Leer todas las filas del Sheet
     const rows = await sheetsClient.readSheet(spreadsheetId)
     
     if (!rows || rows.length === 0) {
@@ -45,14 +44,9 @@ export async function POST(req) {
     
     console.log('📤 PASO 1: Sincronizando BD → Sheet...')
     
-    // Obtener todas las asignaciones pendientes de la BD que NO estén en el Sheet
     const assignmentsResult = await query(
       `SELECT 
-        a.id,
-        a.producer,
-        a.lot,
-        a.variety,
-        a.status,
+        a.id, a.producer, a.lot, a.variety, a.status,
         u.email as inspector_email
        FROM assignments a
        INNER JOIN users u ON a.user_id = u.id
@@ -63,14 +57,11 @@ export async function POST(req) {
     const assignmentsFromDB = assignmentsResult.recordset || []
     console.log('📦 Asignaciones en BD:', assignmentsFromDB.length)
 
-    // Parsear el Sheet actual
     const sheetData = sheetsClient.parseRows(rows)
     
-    // Identificar asignaciones que están en BD pero NO en Sheet
     const newRowsToAdd = []
     
     for (const assignment of assignmentsFromDB) {
-      // Buscar si ya existe en el Sheet (por lote)
       const existsInSheet = sheetData.find(row => 
         row.Lote === assignment.lot && row.Productor === assignment.producer
       )
@@ -81,7 +72,7 @@ export async function POST(req) {
           producer: assignment.producer,
           lot: assignment.lot,
           variety: assignment.variety || '',
-          commodity: '', // No lo tenemos en assignments
+          commodity: '',
           inspector: assignment.inspector_email,
           estado: 'Pendiente',
           id: assignment.id.toString()
@@ -89,19 +80,13 @@ export async function POST(req) {
       }
     }
 
-    // Agregar las nuevas filas al Sheet
     if (newRowsToAdd.length > 0) {
       console.log(`📝 Agregando ${newRowsToAdd.length} filas nuevas al Sheet...`)
       
       const nextRow = rows.length + 1
       const newRowsData = newRowsToAdd.map(row => [
-        row.producer,
-        row.lot,
-        row.variety,
-        row.commodity,
-        row.inspector,
-        row.estado,
-        row.id
+        row.producer, row.lot, row.variety, row.commodity,
+        row.inspector, row.estado, row.id
       ])
 
       await sheetsClient.writeSheet(
@@ -121,18 +106,16 @@ export async function POST(req) {
     
     console.log('📥 PASO 2: Sincronizando Sheet → BD...')
 
-    // Recargar el Sheet (por si agregamos filas)
     const updatedRows = await sheetsClient.readSheet(spreadsheetId)
     const inspecciones = sheetsClient.parseRows(updatedRows)
     
     console.log('📦 Inspecciones parseadas del Sheet:', inspecciones.length)
 
     let nuevas = 0
-    let actualizadas = 0
+    let skipped = 0
     let errores = 0
     const updates = []
 
-    // Procesar cada inspección del Sheet
     for (const insp of inspecciones) {
       try {
         const producer = insp['Productor'] || insp['productor'] || insp['Producer'] || ''
@@ -149,9 +132,32 @@ export async function POST(req) {
           continue
         }
 
-        // Si ya tiene ID y estado "Importada" o "Pendiente", skip
-        if (idInspeccion && (estado === 'Importada' || estado === 'Pendiente')) {
-          console.log(`⏭️ Fila ${insp._rowNumber}: Ya procesada (ID: ${idInspeccion})`)
+        // Si ya tiene ID en el Sheet, skip
+        if (idInspeccion) {
+          console.log(`⏭️ Fila ${insp._rowNumber}: Ya tiene ID (${idInspeccion}), skip`)
+          skipped++
+          continue
+        }
+
+        // ✅ VERIFICAR SI YA EXISTE EN BD (evitar duplicados)
+        const existingAssignment = await query(
+          `SELECT id, status FROM assignments 
+           WHERE lot = @lot AND producer = @producer`,
+          { lot: lot.trim(), producer: producer.trim() }
+        )
+
+        if (existingAssignment.recordset?.length > 0) {
+          const existing = existingAssignment.recordset[0]
+          console.log(`⏭️ Fila ${insp._rowNumber}: Ya existe en BD (ID: ${existing.id}, estado: ${existing.status})`)
+          
+          // Actualizar el Sheet con el ID existente
+          const idCol = 7
+          updates.push({
+            range: `${sheetsClient.numberToColumn(idCol)}${insp._rowNumber}`,
+            values: [[existing.id]]
+          })
+          
+          skipped++
           continue
         }
 
@@ -230,7 +236,7 @@ export async function POST(req) {
     console.log(`✅ Sincronización completada:`)
     console.log(`   - ${newRowsToAdd.length} filas agregadas al Sheet (BD → Sheet)`)
     console.log(`   - ${nuevas} asignaciones nuevas importadas (Sheet → BD)`)
-    console.log(`   - ${actualizadas} actualizadas`)
+    console.log(`   - ${skipped} omitidas (ya existen)`)
     console.log(`   - ${errores} errores`)
 
     return NextResponse.json({
@@ -238,7 +244,7 @@ export async function POST(req) {
       bd_to_sheet: newRowsToAdd.length,
       sheet_to_bd: nuevas,
       nuevas,
-      actualizadas,
+      skipped,
       errores,
       total: inspecciones.length
     })

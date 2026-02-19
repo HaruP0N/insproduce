@@ -8,10 +8,6 @@ const STATUS_OPTIONS = [
   { value: 'Cancelada',  label: '🔴 Cancelada',  color: '#991b1b', bg: '#fff1f2', bd: '#fca5a5' },
 ]
 
-/**
- * Componente COMPLETO de Google Sheets
- * Incluye: Configuración + Tabla Editable + Sincronización
- */
 export default function GestionInspecciones({ onSyncSuccess }) {
   const [inspecciones, setInspecciones] = useState([])
   const [loading, setLoading] = useState(false)
@@ -23,13 +19,14 @@ export default function GestionInspecciones({ onSyncSuccess }) {
   const [lastSync, setLastSync] = useState(null)
   const [syncStats, setSyncStats] = useState(null)
   const [inspectores, setInspectores] = useState([])
+  const [commodities, setCommodities] = useState([]) // ← NUEVO
 
   const [showNewRow, setShowNewRow] = useState(false)
   const [newInspection, setNewInspection] = useState({
     producer: '',
     lot: '',
     variety: '',
-    commodity: '',
+    commodity: '', // ← NUEVO: campo commodity
     inspector: '',
     estado: 'Pendiente'
   })
@@ -38,6 +35,7 @@ export default function GestionInspecciones({ onSyncSuccess }) {
     checkConfiguration()
     loadLastSync()
     loadInspectores()
+    loadCommodities() // ← NUEVO
     if (configured) {
       loadFromSheet()
     }
@@ -81,6 +79,23 @@ export default function GestionInspecciones({ onSyncSuccess }) {
       }
     } catch (err) {
       console.error('Error loading inspectores:', err)
+    }
+  }
+
+  // ← NUEVO: Cargar commodities
+  const loadCommodities = async () => {
+    try {
+      const res = await fetch('/api/commodities', {
+        credentials: 'include'
+      })
+      const data = await res.json()
+      console.log('📦 Commodities cargados:', data)  // ← AGREGAR ESTA LÍNEA
+      if (res.ok && Array.isArray(data)){
+        setCommodities(data)
+        console.log('✅ Commodities guardados en estado')
+      }
+    } catch (err) {
+      console.error('Error loading commodities:', err)
     }
   }
 
@@ -157,7 +172,7 @@ export default function GestionInspecciones({ onSyncSuccess }) {
 
       setSyncStats(data)
       setLastSync(new Date())
-      alert(`✅ Sincronización completada:\n- ${data.nuevas} inspecciones creadas\n- ${data.errores} errores`)
+      alert(`✅ Sincronización completada:\n- ${data.nuevas} inspecciones creadas\n- ${data.skipped || 0} omitidas\n- ${data.errores} errores`)
       
       await loadFromSheet()
       if (onSyncSuccess) onSyncSuccess()
@@ -479,15 +494,13 @@ export default function GestionInspecciones({ onSyncSuccess }) {
         </div>
       </div>
 
-      {/* Última sincronización */}
       {configured && lastSync && !showConfig && (
         <div style={styles.infoBox}>
           📅 Última importación: {lastSync.toLocaleDateString('es-CL')} {lastSync.toLocaleTimeString('es-CL')}
-          {syncStats && ` • ${syncStats.nuevas} nuevas • ${syncStats.errores} errores`}
+          {syncStats && ` • ${syncStats.nuevas} nuevas • ${syncStats.skipped || 0} omitidas • ${syncStats.errores} errores`}
         </div>
       )}
 
-      {/* Configuración */}
       {showConfig && (
         <div style={styles.configBox}>
           <h3 style={{ margin: '0 0 12px', color: '#2E7D32', fontSize: 16 }}>
@@ -531,7 +544,6 @@ export default function GestionInspecciones({ onSyncSuccess }) {
         </div>
       )}
 
-      {/* Alerta si no está configurado */}
       {!configured && !showConfig && (
         <div style={{ 
           background: '#fff7ed', 
@@ -548,7 +560,6 @@ export default function GestionInspecciones({ onSyncSuccess }) {
         </div>
       )}
 
-      {/* Formulario nueva fila */}
       {configured && showNewRow && (
         <div style={styles.newRowForm}>
           <div style={styles.formGroup}>
@@ -577,18 +588,25 @@ export default function GestionInspecciones({ onSyncSuccess }) {
               style={styles.input}
               value={newInspection.variety}
               onChange={(e) => setNewInspection(prev => ({ ...prev, variety: e.target.value }))}
-              placeholder="Ej: Uva Thompson"
+              placeholder="Ej: Duke"
             />
           </div>
 
+          {/* ← NUEVO: Selector de Commodity */}
           <div style={styles.formGroup}>
             <label style={styles.label}>Commodity</label>
-            <input
+            <select
               style={styles.input}
               value={newInspection.commodity}
-              onChange={(e) => setNewInspection(prev => ({ ...prev, commodity: e.target.value }))}
-              placeholder="Ej: 0805"
-            />
+              onChange={(e) => setNewInspection(prev => ({ ...prev, commodity: e.target.value }))}>
+                <option value="">Sin especificar</option>
+                {console.log('🔍 Rendering select, commodities:', commodities)}
+                {commodities.map(c => (
+                  <option key={c.id} value={c.code}>
+                    {c.name} ({c.code})
+                  </option>
+                ))}
+            </select>
           </div>
 
           <div style={styles.formGroup}>
@@ -628,7 +646,6 @@ export default function GestionInspecciones({ onSyncSuccess }) {
         </div>
       )}
 
-      {/* Tabla */}
       {configured && (
         <div style={styles.tableWrap}>
           <table style={styles.table}>
@@ -660,7 +677,6 @@ export default function GestionInspecciones({ onSyncSuccess }) {
               ) : (
                 inspecciones.map((insp, idx) => (
                   <tr key={idx}>
-                    {/* PRODUCTOR - ahora es input de texto libre */}
                     <td style={styles.td}>
                       {editingRow === idx ? (
                         <input
@@ -700,13 +716,23 @@ export default function GestionInspecciones({ onSyncSuccess }) {
 
                     <td style={styles.td}>
                       {editingRow === idx ? (
-                        <input
+                        <select
                           style={styles.input}
-                          value={insp.Commodity || ''}
-                          onChange={(e) => updateField(idx, 'Commodity', e.target.value)}
-                        />
+                          value={insp.commodity_code || insp.Commodity || ''}
+                          onChange={(e) => {
+                            updateField(idx, 'Commodity', e.target.value)
+                            updateField(idx, 'commodity_code', e.target.value)
+                          }}
+                        >
+                          <option value="">Sin especificar</option>
+                          {commodities.map(c => (
+                            <option key={c.id} value={c.code}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
                       ) : (
-                        insp.Commodity || '--'
+                        insp.commodity_code || insp.Commodity || '--'
                       )}
                     </td>
 
@@ -729,7 +755,6 @@ export default function GestionInspecciones({ onSyncSuccess }) {
                       )}
                     </td>
 
-                    {/* ESTADO - ahora es editable con dropdown */}
                     <td style={styles.td}>
                       {editingRow === idx ? (
                         <select

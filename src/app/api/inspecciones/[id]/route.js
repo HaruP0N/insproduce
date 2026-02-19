@@ -1,105 +1,88 @@
+// src/app/api/assignments/[id]/route.js
 import { NextResponse } from 'next/server'
-import { query } from '@/lib/db/mssql'
 import { verifyTokenFromCookies } from '@/lib/auth/verifyToken'
+import { query } from '@/lib/db/mssql'
 
+// GET - Obtener datos de una asignación
 export async function GET(req, context) {
   const v = verifyTokenFromCookies(req)
-  if (!v.ok) return NextResponse.json({ msg: v.msg }, { status: v.status })
+  if (!v.ok || !v.user) return NextResponse.json({ msg: 'No autenticado' }, { status: 401 })
 
   try {
     const params = await context.params
-    const id = Number(params?.id)
+    const { id } = params
 
-    if (!Number.isInteger(id) || id <= 0) {
-      return NextResponse.json({ msg: 'ID inválido' }, { status: 400 })
-    }
-
-    const r = await query(
+    const result = await query(
       `SELECT 
-         i.*,
-         c.code as commodity_code,
-         c.name as commodity_name
-       FROM inspections i
-       LEFT JOIN commodities c ON c.id = i.commodity_id
-       WHERE i.id = @id`,
-      { id }
+        a.id, a.producer, a.lot, a.variety, a.commodity_code, a.status, a.notes_admin, a.created_at,
+        u.id as inspector_id, u.name as inspector_name, u.email as inspector_email
+       FROM assignments a
+       LEFT JOIN users u ON a.user_id = u.id
+       WHERE a.id = @id`,
+      { id: parseInt(id) }
     )
 
-    if (!r.recordset?.length) {
-      return NextResponse.json({ msg: 'No encontrada' }, { status: 404 })
+    if (!result.recordset?.length) {
+      return NextResponse.json({ msg: 'Asignación no encontrada' }, { status: 404 })
     }
 
-    const insp = r.recordset[0]
-
-    // 🔧 Normalizar metrics: siempre retornar { values: {...} }
-    let metrics = insp.metrics
-    try {
-      if (typeof metrics === 'string') metrics = JSON.parse(metrics)
-    } catch {
-      metrics = {}
-    }
-
-    // Si metrics es un objeto plano SIN capa "values", envolverlo
-    if (metrics && typeof metrics === 'object' && !metrics.values) {
-      metrics = { values: metrics }
-    } else if (!metrics || typeof metrics !== 'object') {
-      metrics = { values: {} }
-    }
-
-    return NextResponse.json({ ...insp, metrics })
+    return NextResponse.json(result.recordset[0])
   } catch (e) {
-    console.error('[GET /inspecciones/[id]]', e)
-    return NextResponse.json({ msg: 'Error al obtener inspección' }, { status: 500 })
+    console.error('❌ [get assignment]', e)
+    return NextResponse.json({ msg: 'Error: ' + e.message }, { status: 500 })
   }
 }
 
-export async function PUT(req, context) {
+// PATCH - Cambiar estado de una asignación (solo admin)
+export async function PATCH(req, context) {
   const v = verifyTokenFromCookies(req)
-  if (!v.ok) return NextResponse.json({ msg: v.msg }, { status: v.status })
+  if (!v.ok || !v.user) return NextResponse.json({ msg: 'No autenticado' }, { status: 401 })
+  if (v.user.role !== 'admin') return NextResponse.json({ msg: 'Solo admin' }, { status: 403 })
 
   try {
     const params = await context.params
-    const id = Number(params?.id)
+    const { id } = params
+    const body = await req.json().catch(() => ({}))
+    const { status } = body
 
-    if (!Number.isInteger(id) || id <= 0) {
-      return NextResponse.json({ msg: 'ID inválido' }, { status: 400 })
+    const allowed = ['pendiente', 'completada', 'cancelada']
+    if (!status || !allowed.includes(status)) {
+      return NextResponse.json({ msg: `Estado inválido. Valores permitidos: ${allowed.join(', ')}` }, { status: 400 })
     }
 
-    const body = await req.json().catch(() => ({}))
-
-    const {
-      producer, lot, variety, caliber,
-      packaging_code, packaging_type, packaging_date
-    } = body
-
     await query(
-      `UPDATE inspections 
-       SET producer = @producer,
-           lot = @lot,
-           variety = @variety,
-           caliber = @caliber,
-           packaging_code = @packaging_code,
-           packaging_type = @packaging_type,
-           packaging_date = @packaging_date,
-           pdf_url = NULL,
-           pdf_hash = NULL,
-           updated_at = GETDATE()
-       WHERE id = @id`,
-      {
-        id,
-        producer: producer || null,
-        lot: lot || null,
-        variety: variety || null,
-        caliber: caliber || null,
-        packaging_code: packaging_code || null,
-        packaging_type: packaging_type || null,
-        packaging_date: packaging_date || null
-      }
+      `UPDATE assignments SET status = @status WHERE id = @id`,
+      { id: parseInt(id), status }
     )
 
-    return NextResponse.json({ ok: true, id })
+    return NextResponse.json({ ok: true, msg: `Estado cambiado a "${status}"` })
   } catch (e) {
-    console.error('[PUT /inspecciones/[id]]', e)
-    return NextResponse.json({ msg: 'Error al actualizar inspección' }, { status: 500 })
+    console.error('❌ [patch assignment]', e)
+    return NextResponse.json({ msg: 'Error: ' + e.message }, { status: 500 })
+  }
+}
+
+// DELETE - Cancelar una asignación
+export async function DELETE(req, context) {
+  const v = verifyTokenFromCookies(req)
+  if (!v.ok || !v.user) return NextResponse.json({ msg: 'No autenticado' }, { status: 401 })
+  if (v.user.role !== 'admin') return NextResponse.json({ msg: 'Solo admin' }, { status: 403 })
+
+  try {
+    const params = await context.params
+    const { id } = params
+
+    await query(
+      `UPDATE assignments 
+       SET status = 'cancelada', 
+           notes_admin = CONCAT(ISNULL(notes_admin, ''), ' [CANCELADA POR ADMIN]')
+       WHERE id = @id`,
+      { id: parseInt(id) }
+    )
+
+    return NextResponse.json({ msg: 'Asignación cancelada' })
+  } catch (e) {
+    console.error('❌ [delete assignment]', e)
+    return NextResponse.json({ msg: 'Error: ' + e.message }, { status: 500 })
   }
 }
