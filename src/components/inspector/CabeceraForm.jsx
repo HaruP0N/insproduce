@@ -2,21 +2,44 @@ import { Leaf, Package } from 'lucide-react'
 import ImageUploader from '@/components/ImageUploader'
 
 const CAMPOS_BASICOS = [
-  ['producer',  'Productor',     true,  'text'],
-  ['lot',       'Lote / Serie',  true,  'text'],
-  ['variety',   'Variedad',      false, 'text'],
-  ['caliber',   'Calibre',       false, 'text'],
+  ['producer', 'Productor',    true,  'text'],
+  ['lot',      'Lote / Serie', true,  'text'],
+  ['variety',  'Variedad',     false, 'text'],
+  ['caliber',  'Calibre',      false, 'text'],
 ]
 
 const CAMPOS_CON_FOTO = [
-  ['packaging_code', 'Cod. Embalaje',       false, 'text'],
-  ['packaging_type', 'Tipo Embalaje',       false, 'text'],
-  ['packaging_date', 'Fecha Embalaje',      false, 'date'],
-  ['net_weight',     'Peso neto (kg)',      false, 'number'],
-  ['brix_avg',       'Brix promedio',       false, 'number'],
-  ['temp_water',     'Temp agua (°C)',      false, 'number'],
-  ['temp_ambient',   'Temp ambiente (°C)',  false, 'number'],
-  ['temp_pulp',      'Temp pulpa (°C)',     false, 'number'],
+  ['packaging_code', 'Cod. Embalaje',  false, 'text'],
+  ['packaging_type', 'Tipo Embalaje',  false, 'text'],
+  ['packaging_date', 'Fecha Embalaje', false, 'date'],
+  ['net_weight',     'Peso neto (kg)', false, 'number'],
+]
+
+const GRUPOS_NUMERICOS = [
+  {
+    label: 'Brix',
+    campos: [
+      ['brix_avg',  'Promedio'],
+      ['brix_min',  'Mínimo'],
+      ['brix_max',  'Máximo'],
+      ['brix_moda', 'Moda'],
+    ]
+  },
+  {
+    label: 'Temperatura (°C)',
+    campos: [
+      ['temp_water',   'Agua'],
+      ['temp_ambient', 'Ambiente'],
+      ['temp_pulp',    'Pulpa'],
+    ]
+  },
+  {
+    label: 'Diámetro (mm)',
+    campos: [
+      ['diameter_min', 'Mínimo'],
+      ['diameter_max', 'Máximo'],
+    ]
+  }
 ]
 
 const inputStyle = (readonly, theme) => ({
@@ -27,6 +50,12 @@ const inputStyle = (readonly, theme) => ({
   fontWeight: readonly ? 700 : 400, boxSizing: 'border-box'
 })
 
+const numInputStyle = {
+  width: '100%', padding: '8px 10px', borderRadius: 8,
+  border: '1px solid #d1d5db', background: '#fff',
+  color: '#111827', fontSize: 14, boxSizing: 'border-box'
+}
+
 export default function CabeceraForm({ header, headerPhotos, onHeader, onHeaderPhotos, isFromAssignment, theme, loading }) {
   return (
     <div style={{ background: '#fff', borderRadius: 16, padding: 20, marginBottom: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
@@ -36,6 +65,8 @@ export default function CabeceraForm({ header, headerPhotos, onHeader, onHeaderP
       </h3>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+
+        {/* ── Campos básicos ── */}
         {CAMPOS_BASICOS.map(([k, label, req]) => {
           const readonly = isFromAssignment && ['producer', 'lot', 'variety'].includes(k)
           return (
@@ -49,9 +80,10 @@ export default function CabeceraForm({ header, headerPhotos, onHeader, onHeaderP
           )
         })}
 
+        {/* ── Campos con foto ── */}
         {CAMPOS_CON_FOTO.map(([k, label, req, type]) => (
           <div key={k} style={{ gridColumn: '1 / -1' }}>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 900, color: '#374151', marginBottom: 6, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 900, color: '#374151', marginBottom: 6, textTransform: 'uppercase' }}>
               <Package size={11} color="#6b7280" /> {label}
             </label>
             <input type={type} name={k} value={header[k]} onChange={onHeader}
@@ -63,6 +95,27 @@ export default function CabeceraForm({ header, headerPhotos, onHeader, onHeaderP
           </div>
         ))}
 
+        {/* ── Grupos numéricos compactos ── */}
+        {GRUPOS_NUMERICOS.map(({ label, campos }) => (
+          <div key={label} style={{ gridColumn: '1 / -1', background: '#f8fafc', borderRadius: 12, padding: 14, border: '1px solid #e5e7eb' }}>
+            <div style={{ fontSize: 11, fontWeight: 900, color: '#374151', textTransform: 'uppercase', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Package size={11} color="#6b7280" /> {label}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${campos.length}, 1fr)`, gap: 10 }}>
+              {campos.map(([k, sublabel]) => (
+                <div key={k}>
+                  <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: '#6b7280', marginBottom: 5, textTransform: 'uppercase' }}>
+                    {sublabel}
+                  </label>
+                  <input type="number" name={k} value={header[k] ?? ''} onChange={onHeader}
+                    style={numInputStyle} step="0.01" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {/* ── Notas ── */}
         <div style={{ gridColumn: '1 / -1' }}>
           <label style={{ display: 'block', fontSize: 11, fontWeight: 900, color: '#374151', marginBottom: 6, textTransform: 'uppercase' }}>
             Notas / Comentarios
@@ -70,6 +123,7 @@ export default function CabeceraForm({ header, headerPhotos, onHeader, onHeaderP
           <textarea name="notes" value={header.notes} onChange={onHeader} rows={3}
             style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid #d1d5db', fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical' }} />
         </div>
+
       </div>
     </div>
   )
