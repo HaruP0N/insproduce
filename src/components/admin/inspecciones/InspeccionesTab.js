@@ -48,6 +48,13 @@ export default function InspeccionesTab() {
   // ── Handlers cabecera ──
   const openEditHeader = () => {
     if (!detail) return
+
+    // Parsear header_photos si viene como string JSON
+    let hPhotos = detail.header_photos || {}
+    if (typeof hPhotos === 'string') {
+      try { hPhotos = JSON.parse(hPhotos) } catch { hPhotos = {} }
+    }
+
     setHeaderDraft({
       producer:       detail.producer       || '',
       lot:            detail.lot            || '',
@@ -66,7 +73,8 @@ export default function InspeccionesTab() {
       temp_pulp:      detail.temp_pulp      ?? '',
       diameter_min:   detail.diameter_min   ?? '',
       diameter_max:   detail.diameter_max   ?? '',
-      notes:          detail.notes          || ''
+      notes:          detail.notes          || '',
+      header_photos:  hPhotos
     })
     setEditHeaderOpen(true)
   }
@@ -75,10 +83,10 @@ export default function InspeccionesTab() {
     if (!detail?.id) return
     setSavingHeader(true)
     try {
-      const res  = await fetch(`/api/inspecciones/${detail.id}`, {
+      const res = await fetch(`/api/inspecciones/${detail.id}`, {
         method: 'PUT', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(headerDraft)
+        body: JSON.stringify(headerDraft)  // incluye header_photos
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) throw new Error(data?.msg || 'Error')

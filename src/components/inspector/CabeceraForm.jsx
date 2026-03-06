@@ -17,7 +17,9 @@ const CAMPOS_CON_FOTO = [
 
 const GRUPOS_NUMERICOS = [
   {
+    key:   'brix',
     label: 'Brix',
+    foto:  true,
     campos: [
       ['brix_avg',  'Promedio'],
       ['brix_min',  'Mínimo'],
@@ -26,7 +28,9 @@ const GRUPOS_NUMERICOS = [
     ]
   },
   {
+    key:   'temperatura',
     label: 'Temperatura (°C)',
+    foto:  true,
     campos: [
       ['temp_water',   'Agua'],
       ['temp_ambient', 'Ambiente'],
@@ -34,7 +38,9 @@ const GRUPOS_NUMERICOS = [
     ]
   },
   {
+    key:   'diametro',
     label: 'Diámetro (mm)',
+    foto:  false,
     campos: [
       ['diameter_min', 'Mínimo'],
       ['diameter_max', 'Máximo'],
@@ -96,12 +102,12 @@ export default function CabeceraForm({ header, headerPhotos, onHeader, onHeaderP
         ))}
 
         {/* ── Grupos numéricos compactos ── */}
-        {GRUPOS_NUMERICOS.map(({ label, campos }) => (
-          <div key={label} style={{ gridColumn: '1 / -1', background: '#f8fafc', borderRadius: 12, padding: 14, border: '1px solid #e5e7eb' }}>
+        {GRUPOS_NUMERICOS.map(({ key, label, foto, campos }) => (
+          <div key={key} style={{ gridColumn: '1 / -1', background: '#f8fafc', borderRadius: 12, padding: 14, border: '1px solid #e5e7eb' }}>
             <div style={{ fontSize: 11, fontWeight: 900, color: '#374151', textTransform: 'uppercase', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 5 }}>
               <Package size={11} color="#6b7280" /> {label}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${campos.length}, 1fr)`, gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${campos.length}, 1fr)`, gap: 10, marginBottom: foto ? 12 : 0 }}>
               {campos.map(([k, sublabel]) => (
                 <div key={k}>
                   <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: '#6b7280', marginBottom: 5, textTransform: 'uppercase' }}>
@@ -112,6 +118,15 @@ export default function CabeceraForm({ header, headerPhotos, onHeader, onHeaderP
                 </div>
               ))}
             </div>
+            {foto && (
+              <ImageUploader
+                fieldKey={`header.${key}`}
+                images={headerPhotos[key] || []}
+                onChange={urls => onHeaderPhotos(key, urls)}
+                maxImages={3}
+                disabled={loading}
+              />
+            )}
           </div>
         ))}
 

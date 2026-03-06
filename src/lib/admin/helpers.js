@@ -5,11 +5,21 @@ export function safeStr(v) {
   return String(v)
 }
 
-export function formatDate(dateStr) {
-  if (!dateStr) return '--'
-  const d = new Date(dateStr)
-  if (Number.isNaN(d.getTime())) return '--'
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+export function formatDate(val) {
+  if (!val) return '--'
+  // mssql puede devolver objeto Date o string ISO
+  let year, month, day
+  if (val instanceof Date) {
+    year  = val.getUTCFullYear()
+    month = val.getUTCMonth() + 1
+    day   = val.getUTCDate()
+  } else {
+    const iso = String(val).slice(0, 10)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '--'
+    ;[year, month, day] = iso.split('-').map(Number)
+  }
+  if (!year || !month || !day) return '--'
+  return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`
 }
 
 export function parseKey(key) {
