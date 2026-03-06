@@ -27,6 +27,7 @@ export async function GET(req, context) {
         i.temp_water, i.temp_ambient, i.temp_pulp,
         i.diameter_min, i.diameter_max,
         i.notes, i.metrics,
+        i.header_photos,
         c.code  AS commodity_code,
         c.name  AS commodity_name,
         p.pdf_url
@@ -48,7 +49,9 @@ export async function GET(req, context) {
       values:      metricsRaw.values      ?? {}
     }
 
-    return NextResponse.json({ ...row, metrics })
+    const header_photos = safeJson(row.header_photos)
+
+    return NextResponse.json({ ...row, metrics, header_photos })
   } catch (e) {
     console.error('❌ [GET inspecciones/id]', e)
     return NextResponse.json({ msg: 'Error: ' + e.message }, { status: 500 })
@@ -72,7 +75,8 @@ export async function PUT(req, context) {
       brix_avg, brix_min, brix_max, brix_moda,
       temp_water, temp_ambient, temp_pulp,
       diameter_min, diameter_max,
-      notes
+      notes,
+      header_photos
     } = body
 
     await query(
@@ -94,7 +98,8 @@ export async function PUT(req, context) {
         temp_pulp      = @temp_pulp,
         diameter_min   = @diameter_min,
         diameter_max   = @diameter_max,
-        notes          = @notes
+        notes          = @notes,
+        header_photos  = @header_photos
        WHERE id = @id`,
       {
         id:             parseInt(id),
@@ -105,17 +110,18 @@ export async function PUT(req, context) {
         packaging_code: packaging_code || null,
         packaging_type: packaging_type || null,
         packaging_date: packaging_date || null,
-        net_weight:     net_weight     != null && net_weight !== '' ? Number(net_weight)    : null,
-        brix_avg:       brix_avg       != null && brix_avg   !== '' ? Number(brix_avg)      : null,
-        brix_min:       brix_min       != null && brix_min   !== '' ? Number(brix_min)      : null,
-        brix_max:       brix_max       != null && brix_max   !== '' ? Number(brix_max)      : null,
-        brix_moda:      brix_moda      != null && brix_moda  !== '' ? Number(brix_moda)     : null,
-        temp_water:     temp_water     != null && temp_water !== '' ? Number(temp_water)    : null,
-        temp_ambient:   temp_ambient   != null && temp_ambient !== '' ? Number(temp_ambient) : null,
-        temp_pulp:      temp_pulp      != null && temp_pulp  !== '' ? Number(temp_pulp)     : null,
-        diameter_min:   diameter_min   != null && diameter_min !== '' ? Number(diameter_min) : null,
-        diameter_max:   diameter_max   != null && diameter_max !== '' ? Number(diameter_max) : null,
-        notes:          notes          || null
+        net_weight:     net_weight     != null && net_weight     !== '' ? Number(net_weight)     : null,
+        brix_avg:       brix_avg       != null && brix_avg       !== '' ? Number(brix_avg)       : null,
+        brix_min:       brix_min       != null && brix_min       !== '' ? Number(brix_min)       : null,
+        brix_max:       brix_max       != null && brix_max       !== '' ? Number(brix_max)       : null,
+        brix_moda:      brix_moda      != null && brix_moda      !== '' ? Number(brix_moda)      : null,
+        temp_water:     temp_water     != null && temp_water     !== '' ? Number(temp_water)     : null,
+        temp_ambient:   temp_ambient   != null && temp_ambient   !== '' ? Number(temp_ambient)   : null,
+        temp_pulp:      temp_pulp      != null && temp_pulp      !== '' ? Number(temp_pulp)      : null,
+        diameter_min:   diameter_min   != null && diameter_min   !== '' ? Number(diameter_min)   : null,
+        diameter_max:   diameter_max   != null && diameter_max   !== '' ? Number(diameter_max)   : null,
+        notes:          notes          || null,
+        header_photos:  header_photos  ? JSON.stringify(header_photos) : null
       }
     )
 

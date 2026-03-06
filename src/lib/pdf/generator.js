@@ -77,12 +77,16 @@ export async function generateInspectionPDF(inspection, photos = {}) {
     const packagingInfo = [
       ['Código embalaje', inspection.packaging_code],
       ['Tipo embalaje',   inspection.packaging_type],
-      ['Fecha embalaje',  inspection.packaging_date ? new Date(inspection.packaging_date).toLocaleDateString('es-CL') : null],
-      ['Peso neto',       inspection.net_weight  ? `${inspection.net_weight} kg`  : null],
-      ['Brix promedio',   inspection.brix_avg    ? `${inspection.brix_avg}°`      : null],
-      ['Temp. agua',      inspection.temp_water  ? `${inspection.temp_water}°C`   : null],
-      ['Temp. ambiente',  inspection.temp_ambient ? `${inspection.temp_ambient}°C` : null],
-      ['Temp. pulpa',     inspection.temp_pulp   ? `${inspection.temp_pulp}°C`    : null]
+      ['Fecha embalaje',  inspection.packaging_date ? formatDate(inspection.packaging_date) : null],
+      ['Peso neto',       inspection.net_weight    ? `${inspection.net_weight} kg`    : null],
+      ['Brix promedio',   inspection.brix_avg      ? `${inspection.brix_avg}°`        : null],
+      ['Brix mín / máx',  (inspection.brix_min != null || inspection.brix_max != null) ? `${inspection.brix_min ?? '--'} / ${inspection.brix_max ?? '--'}` : null],
+      ['Brix moda',       inspection.brix_moda     ? `${inspection.brix_moda}°`       : null],
+      ['Temp. agua',      inspection.temp_water    ? `${inspection.temp_water}°C`     : null],
+      ['Temp. ambiente',  inspection.temp_ambient  ? `${inspection.temp_ambient}°C`   : null],
+      ['Temp. pulpa',     inspection.temp_pulp     ? `${inspection.temp_pulp}°C`      : null],
+      ['Diámetro mín',    inspection.diameter_min  ? `${inspection.diameter_min} mm`  : null],
+      ['Diámetro máx',    inspection.diameter_max  ? `${inspection.diameter_max} mm`  : null],
     ].filter(([, v]) => v)
 
     yPos = drawKeyValueGrid(doc, packagingInfo, yPos, margin, contentWidth, 2)
@@ -147,79 +151,89 @@ export async function generateInspectionPDF(inspection, photos = {}) {
     // ═══════════════════════════════════════════════════════
     // FOTOS — nueva página propia, 3 columnas con título debajo
     // ═══════════════════════════════════════════════════════
-    const photoEntries = Object.entries(photos).filter(([, urls]) => urls?.length > 0)
+    const headerPhotoEntries  = Object.entries(photos).filter(([k, urls]) =>  k.startsWith('header.') && urls?.length > 0)
+    const metricPhotoEntries  = Object.entries(photos).filter(([k, urls]) => !k.startsWith('header.') && urls?.length > 0)
+    const allPhotoEntries     = [...headerPhotoEntries, ...metricPhotoEntries]
 
-    if (photoEntries.length > 0) {
+    if (allPhotoEntries.length > 0) {
       doc.addPage()
       yPos = 20
 
-      yPos = drawSectionHeader(doc, 'FOTOS DE INSPECCIÓN', yPos, margin, pageWidth, '#16a34a')
-      yPos += 8
+      const cols    = 3
+      const imgW    = (contentWidth - (cols - 1) * 4) / cols
+      const imgH    = imgW * 0.75
+      const labelH  = 8
+      const cellH   = imgH + labelH + 4
+      const colGap  = 4
 
-      const cols      = 3
-      const imgW      = (contentWidth - (cols - 1) * 4) / cols   // ~55mm
-      const imgH      = imgW * 0.75                               // 4:3 ratio
-      const labelH    = 8                                          // altura para el título
-      const cellH     = imgH + labelH + 4                         // imagen + label + gap
-      const colGap    = 4
+      const renderPhotoGroup = async (entries, sectionTitle, color) => {
+        if (!entries.length) return
+        if (yPos + 20 > safeBottom) { doc.addPage(); yPos = 20 }
+        yPos = drawSectionHeader(doc, sectionTitle, yPos, margin, pageWidth, color)
+        yPos += 6
 
-      let col = 0   // columna actual (0, 1, 2)
-      let rowStartY = yPos
+        let col = 0
+        let rowStartY = yPos
 
-      for (const [metricKey, urls] of photoEntries) {
-        for (const url of urls) {
-          // ¿Cabe en la página actual?
-          if (rowStartY + cellH > safeBottom) {
-            doc.addPage()
-            rowStartY = 20
-            col = 0
-          }
+        for (const [metricKey, urls] of entries) {
+          for (const url of urls) {
+            if (rowStartY + cellH > safeBottom) {
+              doc.addPage()
+              rowStartY = 20
+              col = 0
+            }
 
-          const xPos = margin + col * (imgW + colGap)
-          const yImg = rowStartY
+            const xPos = margin + col * (imgW + colGap)
+            const yImg = rowStartY
 
-          // Descargar imagen
-          try {
-            const imageData = await downloadImageAsBase64(url)
-            if (imageData) {
-              doc.addImage(imageData, 'JPEG', xPos, yImg, imgW, imgH, undefined, 'FAST')
-            } else {
+            try {
+              const imageData = await downloadImageAsBase64(url)
+              if (imageData) {
+                doc.addImage(imageData, 'JPEG', xPos, yImg, imgW, imgH, undefined, 'FAST')
+              } else {
+                drawPlaceholder(doc, xPos, yImg, imgW, imgH)
+              }
+            } catch {
               drawPlaceholder(doc, xPos, yImg, imgW, imgH)
             }
-          } catch {
-            drawPlaceholder(doc, xPos, yImg, imgW, imgH)
-          }
 
-          // Título debajo de la imagen
-          const rawLabel = metricKey
-            .replace('header.', '')
-            .replace(/\./g, ' - ')
-            .replace(/_/g, ' ')
-          const label = capitalize(rawLabel)
+            // Label traducido
+            const labelMap = {
+              'header.brix':         'Brix',
+              'header.temperatura':  'Temperatura',
+              'header.packaging_code': 'Código Embalaje',
+              'header.packaging_type': 'Tipo Embalaje',
+              'header.packaging_date': 'Fecha Embalaje',
+              'header.net_weight':     'Peso Neto',
+            }
+            const rawLabel = labelMap[metricKey] || metricKey
+              .replace('header.', '')
+              .replace(/^(quality|condition|pack)\./, '')
+              .replace(/\./g, ' - ')
+              .replace(/_/g, ' ')
+            const label = capitalize(rawLabel)
 
-          doc.setFontSize(7.5)
-          doc.setTextColor(75, 85, 99)
-          doc.setFont(undefined, 'bold')
-          // Truncar si es muy largo
-          const maxChars = Math.floor(imgW / 1.8)
-          const shortLabel = label.length > maxChars ? label.slice(0, maxChars - 1) + '…' : label
-          doc.text(shortLabel, xPos + imgW / 2, yImg + imgH + 5, { align: 'center' })
-          doc.setFont(undefined, 'normal')
+            doc.setFontSize(7.5)
+            doc.setTextColor(75, 85, 99)
+            doc.setFont(undefined, 'bold')
+            const maxChars = Math.floor(imgW / 1.8)
+            const shortLabel = label.length > maxChars ? label.slice(0, maxChars - 1) + '…' : label
+            doc.text(shortLabel, xPos + imgW / 2, yImg + imgH + 5, { align: 'center' })
+            doc.setFont(undefined, 'normal')
 
-          col++
-          if (col >= cols) {
-            col = 0
-            rowStartY += cellH + 4
+            col++
+            if (col >= cols) {
+              col = 0
+              rowStartY += cellH + 4
+            }
           }
         }
+
+        yPos = col > 0 ? rowStartY + cellH + 8 : rowStartY + 8
       }
 
-      // Si quedó una fila incompleta, avanzar yPos
-      if (col > 0) {
-        yPos = rowStartY + cellH + 4
-      } else {
-        yPos = rowStartY
-      }
+      await renderPhotoGroup(headerPhotoEntries, 'EVIDENCIA DE MEDICIÓN', '#16a34a')
+      await renderPhotoGroup(metricPhotoEntries, 'EVIDENCIA DE DEFECTOS', '#2563eb')
     }
 
     // ═══════════════════════════════════════════════════════
@@ -295,6 +309,22 @@ function drawPlaceholder(doc, x, y, w, h) {
   doc.setFontSize(8)
   doc.setTextColor(156, 163, 175)
   doc.text('Imagen no disponible', x + w / 2, y + h / 2, { align: 'center' })
+}
+
+function formatDate(val) {
+  // mssql puede devolver un objeto Date o un string ISO
+  let iso
+  if (val instanceof Date) {
+    // Usar componentes UTC para evitar offset de zona horaria
+    const y = val.getUTCFullYear()
+    const m = String(val.getUTCMonth() + 1).padStart(2, '0')
+    const d = String(val.getUTCDate()).padStart(2, '0')
+    iso = `${y}-${m}-${d}`
+  } else {
+    iso = String(val).slice(0, 10)
+  }
+  const [year, month, day] = iso.split('-')
+  return `${day}-${month}-${year}`
 }
 
 function capitalize(str) {

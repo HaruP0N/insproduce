@@ -14,15 +14,35 @@ export default function DetalleModal({ detail, loading, onClose, onEditHeader, o
   const headerSections = [
     {
       title: 'Datos generales', Icon: Leaf,
-      fields: [['Productor', detail?.producer], ['Lote', detail?.lot], ['Variedad', detail?.variety], ['Calibre', detail?.caliber]]
+      fields: [
+        ['Productor', detail?.producer],
+        ['Lote',      detail?.lot],
+        ['Variedad',  detail?.variety],
+        ['Calibre',   detail?.caliber]
+      ]
     },
     {
       title: 'Embalaje', Icon: Package,
-      fields: [['Código', detail?.packaging_code], ['Tipo', detail?.packaging_type], ['Fecha', formatDate(detail?.packaging_date)], ['Peso neto', detail?.net_weight ? `${detail.net_weight} kg` : null]]
+      fields: [
+        ['Código',    detail?.packaging_code],
+        ['Tipo',      detail?.packaging_type],
+        ['Fecha',     formatDate(detail?.packaging_date)],
+        ['Peso neto', detail?.net_weight ? `${detail.net_weight} kg` : null]
+      ]
     },
     {
       title: 'Temperatura & Brix', Icon: Thermometer,
-      fields: [['Brix promedio', detail?.brix_avg != null ? `${detail.brix_avg}°` : null], ['Temp. agua', detail?.temp_water != null ? `${detail.temp_water}°C` : null], ['Temp. ambiente', detail?.temp_ambient != null ? `${detail.temp_ambient}°C` : null], ['Temp. pulpa', detail?.temp_pulp != null ? `${detail.temp_pulp}°C` : null]]
+      fields: [
+        ['Brix promedio',  detail?.brix_avg     != null ? `${detail.brix_avg}°`    : null],
+        ['Brix mín/máx',   (detail?.brix_min != null || detail?.brix_max != null)
+          ? `${detail?.brix_min ?? '--'} / ${detail?.brix_max ?? '--'}` : null],
+        ['Brix moda',      detail?.brix_moda    != null ? `${detail.brix_moda}°`   : null],
+        ['Temp. agua',     detail?.temp_water   != null ? `${detail.temp_water}°C` : null],
+        ['Temp. ambiente', detail?.temp_ambient != null ? `${detail.temp_ambient}°C` : null],
+        ['Temp. pulpa',    detail?.temp_pulp    != null ? `${detail.temp_pulp}°C`  : null],
+        ['Diámetro',       (detail?.diameter_min != null || detail?.diameter_max != null)
+          ? `${detail?.diameter_min ?? '--'} – ${detail?.diameter_max ?? '--'} mm` : null],
+      ]
     }
   ]
 
@@ -39,15 +59,14 @@ export default function DetalleModal({ detail, loading, onClose, onEditHeader, o
             {detail?.commodity_name && <div style={{ fontSize: 13, opacity: 0.8, marginTop: 2 }}>{detail.commodity_name}</div>}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            {detail?.pdf_url ? (
+            {detail?.pdf_url && (
               <Button onClick={onOpenPDF} style={{ background: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.4)', color: '#fff' }}>
                 <FileText size={14} /> Ver PDF
               </Button>
-            ) : (
-              <Button onClick={() => onGenerarPDF(detail)} style={{ background: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.4)', color: '#fff' }}>
-                <Settings size={14} /> Generar PDF
-              </Button>
             )}
+            <Button onClick={() => onGenerarPDF(detail)} style={{ background: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.4)', color: '#fff' }}>
+              <Settings size={14} /> {detail?.pdf_url ? 'Regenerar PDF' : 'Generar PDF'}
+            </Button>
             <button onClick={onClose} style={{ background: 'rgba(255,255,255,.2)', border: 'none', color: '#fff', borderRadius: 10, padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <X size={14} /> Cerrar
             </button>
@@ -60,7 +79,6 @@ export default function DetalleModal({ detail, loading, onClose, onEditHeader, o
 
           {!loading && detail && (
             <>
-              {/* Info general */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <h4 style={{ margin: 0, color: '#15803d', fontSize: 14, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <ClipboardList size={14} /> Información general
@@ -90,7 +108,6 @@ export default function DetalleModal({ detail, loading, onClose, onEditHeader, o
                 ))}
               </div>
 
-              {/* Notas */}
               {detail?.notes && (
                 <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 12, padding: '10px 16px', marginBottom: 20 }}>
                   <div style={{ fontSize: 10, fontWeight: 900, color: '#92400e', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -100,7 +117,6 @@ export default function DetalleModal({ detail, loading, onClose, onEditHeader, o
                 </div>
               )}
 
-              {/* Métricas */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <h4 style={{ margin: 0, color: '#15803d', fontSize: 14, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <BarChart2 size={14} /> Métricas
