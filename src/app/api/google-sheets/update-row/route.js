@@ -5,58 +5,36 @@ import { sheetsClient } from '@/lib/googleSheets'
 
 export async function PUT(req) {
   const v = verifyTokenFromCookies(req)
-  
-  if (!v.ok || !v.user || v.user.role !== 'admin') {
+  if (!v.ok || !v.user || v.user.role !== 'admin')
     return NextResponse.json({ msg: 'No autorizado' }, { status: 403 })
-  }
 
   try {
     const spreadsheetId = process.env.GOOGLE_SHEET_ID
-    
-    if (!spreadsheetId) {
-      return NextResponse.json({ 
-        msg: 'GOOGLE_SHEET_ID no configurado' 
-      }, { status: 400 })
-    }
+    if (!spreadsheetId)
+      return NextResponse.json({ msg: 'GOOGLE_SHEET_ID no configurado' }, { status: 400 })
 
     const body = await req.json()
     const { rowNumber, data } = body
 
-    if (!rowNumber || !data) {
-      return NextResponse.json({ 
-        msg: 'rowNumber y data son obligatorios' 
-      }, { status: 400 })
-    }
-
-    // Actualizar columnas A-F (incluye Estado ahora)
-    // A: Productor | B: Lote | C: Variedad | D: Commodity | E: Inspector | F: Estado
-    const rowData = [
-      [
-        data.producer || '',
-        data.lot || '',
-        data.variety || '',
-        data.commodity || '',
-        data.inspector || '',
-        data.estado || 'Pendiente'  // ← NUEVO: incluye estado
-      ]
-    ]
+    if (!rowNumber || !data)
+      return NextResponse.json({ msg: 'rowNumber y data son obligatorios' }, { status: 400 })
 
     await sheetsClient.writeSheet(
       spreadsheetId,
-      `A${rowNumber}:F${rowNumber}`,  // ← CAMBIO: ahora incluye columna F
-      rowData
+      `A${rowNumber}:F${rowNumber}`,
+      [[
+        data.producer || '',
+        data.lot      || '',
+        data.variety  || '',
+        data.commodity || '',
+        data.inspector || '',
+        data.estado    || 'Pendiente'
+      ]]
     )
 
-    console.log(`✅ Fila ${rowNumber} actualizada (incluye estado: ${data.estado})`)
-
-    return NextResponse.json({ 
-      msg: 'Fila actualizada'
-    })
-
+    return NextResponse.json({ msg: 'Fila actualizada' })
   } catch (e) {
-    console.error('[update-row]', e)
-    return NextResponse.json({ 
-      msg: 'Error al actualizar: ' + e.message 
-    }, { status: 500 })
+    console.error('[google-sheets/update-row]', e)
+    return NextResponse.json({ msg: 'Error al actualizar: ' + e.message }, { status: 500 })
   }
 }

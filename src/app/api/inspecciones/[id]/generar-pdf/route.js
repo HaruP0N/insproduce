@@ -22,7 +22,6 @@ export async function POST(req, context) {
       return NextResponse.json({ msg: 'ID inválido' }, { status: 400 })
     }
 
-    console.log(`[generar-pdf] Iniciando generación para inspección #${id}`)
 
     // ────────────────────────────────────────────────────────
     // 1. Obtener datos completos de la inspección
@@ -81,22 +80,17 @@ export async function POST(req, context) {
       if (urls?.length) photos[`header.${key}`] = urls
     })
 
-    console.log(`[generar-pdf] Fotos encontradas: ${Object.keys(photos).length} grupos`)
 
     // ────────────────────────────────────────────────────────
     // 4. Generar el PDF
     // ────────────────────────────────────────────────────────
-    console.log(`[generar-pdf] Generando PDF...`)
     const pdfBuffer = await generateInspectionPDF(inspection, photos)
-    console.log(`[generar-pdf] PDF generado: ${pdfBuffer.length} bytes`)
 
     // ────────────────────────────────────────────────────────
     // 5. Subir a Cloudinary
     // ────────────────────────────────────────────────────────
     const filename = `inspeccion-${id}-${Date.now()}`
-    console.log(`[generar-pdf] Subiendo a Cloudinary: ${filename}`)
     const { url: pdfUrl, public_id } = await uploadPDFToCloudinary(pdfBuffer, filename)
-    console.log(`[generar-pdf] PDF subido: ${pdfUrl}`)
 
     // ────────────────────────────────────────────────────────
     // 6. Actualizar BD
@@ -122,7 +116,6 @@ export async function POST(req, context) {
       )
     }
 
-    console.log(`[generar-pdf] BD actualizada para inspección #${id}`)
 
     return NextResponse.json({ ok: true, id, pdf_url: pdfUrl, msg: 'PDF generado exitosamente' })
 
