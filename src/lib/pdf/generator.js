@@ -223,7 +223,11 @@ export async function generateInspectionPDF(report) {
       if (d.band_label) chip(cols[2], py + 5.4, d.band_label, BAND[d.band])
       else { font('normal', 8); text(C.hint); doc.text('—', cols[2], py + 5.4) }
       font('normal', 8); text(C.muted)
-      const trange = d.tol_min != null ? `${fmt(d.tol_min, d.tol_min % 1 ? 2 : 0)}–${d.tol_max == null ? '∞' : fmt(d.tol_max, d.tol_max % 1 ? 2 : 0)}%` : '—'
+      const trange = d.tol_min != null
+        ? (d.tol_max == null
+            ? `${fmt(d.tol_min, d.tol_min % 1 ? 2 : 0)}%+`
+            : `${fmt(d.tol_min, d.tol_min % 1 ? 2 : 0)}-${fmt(d.tol_max, d.tol_max % 1 ? 2 : 0)}%`)
+        : '—'
       doc.text(trange, cols[3], py + 5.4)
       py += 8
     })

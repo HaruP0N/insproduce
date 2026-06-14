@@ -118,3 +118,63 @@ export async function findOrCreatePallet(tx, lotId, palletCode = 'P1') {
     `INSERT INTO qc.pallets (lot_id, pallet_code) OUTPUT INSERTED.id VALUES (@lid, @code)`)
   return ins.recordset[0].id
 }
+
+/* ────────── Commodities CRUD (admin) ────────── */
+export async function listCommoditiesAdmin() {
+  const r = await query(
+    `SELECT c.id, c.code, c.name, c.active, c.created_at,
+            (SELECT COUNT(*) FROM qc.metric_templates t WHERE t.commodity_id=c.id AND t.active=1) AS templates,
+            (SELECT COUNT(*) FROM qc.quality_standards s WHERE s.commodity_id=c.id AND s.active=1) AS standards,
+            (SELECT COUNT(*) FROM qc.defects d WHERE d.commodity_id=c.id AND d.active=1) AS defects
+     FROM qc.commodities c ORDER BY c.active DESC, c.name ASC`)
+  return r.recordset
+}
+
+export async function createCommodity({ code, name }) {
+  const c = String(code || '').trim().toUpperCase()
+  const n = String(name || '').trim()
+  if (!c || !n) throw appError(400, 'Código y nombre son obligatorios')
+  if (!/^[A-Z0-9_]+$/.test(c)) throw appError(400, 'Código: solo A-Z, 0-9, guion bajo')
+  const dup = await query(`SELECT 1 FROM qc.commodities WHERE code=@c OR name=@n`, { c, n })
+  if (dup.recordset?.length) throw appError(409, 'Ya existe un commodity con ese código o nombre')
+  const r = await query(`INSERT INTO qc.commodities (code, name, active) OUTPUT INSERTED.id VALUES (@c, @n, 1)`, { c, n })
+  return r.recordset[0].id
+}
+
+export async function updateCommodity(code, { name, active }) {
+  const c = String(code || '').trim().toUpperCase()
+  const ex = await getCommodityByCode(c)
+  if (!ex) throw appError(404, 'Commodity no encontrado')
+  await query(
+    `UPDATE qc.commodities SET name = COALESCE(@n, name), active = COALESCE(@a, active) WHERE code=@c`,
+    { c, n: name != null ? String(name).trim() : null, a: typeof active === 'boolean' ? (active ? 1 : 0) : null })
+}
+
+/* ────────── Lotes (admin, solo lectura + edición de cabecera) ────────── */
+export async function listLots() {
+  const r = await query(
+    `SELECT l.id, l.lot_code, l.variety, l.packaging_date, l.created_at,
+            c.code AS commodity_code, c.name AS commodity_name,
+            pr.name AS producer,
+            (SELECT COUNT(*) FROM qc.pallets p WHERE p.lot_id=l.id) AS pallets,
+            (SELECT COUNT(*) FROM qc.inspections i JOIN qc.pallets p ON p.id=i.pallet_id WHERE p.lot_id=l.id AND i.deleted_at IS NULL) AS inspections
+     FROM qc.lots l
+     JOIN qc.commodities c ON c.id=l.commodity_id
+     LEFT JOIN qc.producers pr ON pr.id=l.producer_id
+     ORDER BY l.created_at DESC`)
+  return r.recordset
+}
+
+export async function updateLot(id, { variety, producer }) {
+  const ex = await query(`SELECT id FROM qc.lots WHERE id=@id`, { id })
+  if (!ex.recordset?.length) throw appError(404, 'Lote no encontrado')
+  let producerId = null
+  if (producer != null && String(producer).trim()) {
+    const p = await query(`SELECT id FROM qc.producers WHERE name=@n`, { n: String(producer).trim() })
+    if (p.recordset?.length) producerId = p.recordset[0].id
+    else { const ins = await query(`INSERT INTO qc.producers (name) OUTPUT INSERTED.id VALUES (@n)`, { n: String(producer).trim() }); producerId = ins.recordset[0].id }
+  }
+  await query(
+    `UPDATE qc.lots SET variety = COALESCE(@v, variety), producer_id = COALESCE(@pid, producer_id) WHERE id=@id`,
+    { id, v: variety != null ? String(variety).trim() : null, pid: producerId })
+}

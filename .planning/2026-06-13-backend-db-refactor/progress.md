@@ -130,3 +130,11 @@
 - Fix: footer del PDF se llamaba múltiples veces (se superponía "of 8"); ahora una sola vez.
 - ⚠️ PENDIENTE CONFIG: Cloudinary NO está en .env.local (CLOUDINARY_API_KEY/SECRET, NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME) → generar-pdf genera OK pero falla al SUBIR ("Must supply api_key"). El usuario debe cargar esas vars para el flujo real de subida/almacenamiento de PDF y fotos.
 - PENDIENTE frontend: ensamblar app-shell + dashboard + migrar pantallas admin/inspector a los componentes nuevos; rediseñar login; flujo mobile inspector.
+
+## Sesión 2026-06-14 — Frontend admin: port del prototipo "Mejora de prototype"
+- Adoptado el design system del prototipo del cliente (src/styles/ds.css): OKLCH, light/dark, acento índigo "blueberry", IBM Plex (next/font). globals.css cede el body a ds.css; tema sin flash vía script en layout.
+- Componentes portados a Next: src/components/proto/{Icon,charts(Donut/AreaChart/Sparkline/CountUp),ui(Sidebar/TopBar/KpiCard/Card/StatusBadge/ScoreCell)}; helpers src/lib/proto.js (RES, mapResolution en→es, fmt1).
+- Admin (src/components/admin/AdminApp.jsx) montado en /admin: app-shell (sidebar de módulos + topbar + toggle tema + search), Dashboard (KPIs+sparklines, AreaChart de tendencia, donut de resoluciones, defectos causales, recientes), Inspecciones (tabla filtro/search/sort), Drawer (score ring + resolución + meta + desglose de defectos + Ver reporte/Editar). TODO con datos reales.
+- Datos: nuevo endpoint /api/dashboard (agregados qc); historial ahora trae inspector_name. Capa src/lib/adminData.js mapea al shape del prototipo.
+- Verificado: npm run build OK; smoke de /api/dashboard + /api/inspecciones/historial con datos reales.
+- PENDIENTE: wizard "Nueva inspección" (capture/fotos), app Inspector completa, pantallas catálogo (commodities/tolerancias/plantillas/usuarios/asignaciones/lotes/reportes = placeholders por ahora), restyle del login. Nota: counts del donut usan resolution de BD (filas sin tolerancias quedan null → no-aprobado); reconciliable.

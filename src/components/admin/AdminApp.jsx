@@ -5,6 +5,13 @@ import { Donut, AreaChart } from '@/components/proto/charts'
 import { Icon } from '@/components/proto/Icon'
 import { RES, RES_VAR, fmt1, mapResolution, fechaCorta } from '@/lib/proto'
 import { getInspectionsList, getDashboard, getInspectionDetail, getMe, logout } from '@/lib/adminData'
+import UsuariosScreen from '@/components/admin/screens/Usuarios'
+import AsignacionesScreen from '@/components/admin/screens/Asignaciones'
+import CommoditiesScreen from '@/components/admin/screens/Commodities'
+import LotesScreen from '@/components/admin/screens/Lotes'
+import PlantillasScreen from '@/components/admin/screens/Plantillas'
+import ReportesScreen from '@/components/admin/screens/Reportes'
+import IntegracionesScreen from '@/components/admin/screens/Integraciones'
 
 const TITLES = {
   dashboard: ['Dashboard', 'Resumen de calidad'],
@@ -75,6 +82,13 @@ export default function AdminApp() {
   else if (error) screen = <div className="content-inner"><div className="empty"><div className="ei"><Icon name="xCircle" size={22} /></div>{error}</div></div>
   else if (route === 'dashboard') screen = <DashboardScreen list={list} dash={dash} onOpen={setDrawer} onNew={navigate} />
   else if (route === 'inspecciones') screen = <InspeccionesScreen list={list} onOpen={setDrawer} />
+  else if (route === 'usuarios') screen = <UsuariosScreen onToast={showToast} currentUser={user} />
+  else if (route === 'asignaciones') screen = <AsignacionesScreen onToast={showToast} />
+  else if (route === 'commodities') screen = <CommoditiesScreen onToast={showToast} />
+  else if (route === 'lotes') screen = <LotesScreen onToast={showToast} />
+  else if (route === 'plantillas') screen = <PlantillasScreen onToast={showToast} />
+  else if (route === 'reportes') screen = <ReportesScreen list={list} dash={dash} onToast={showToast} />
+  else if (route === 'integraciones') screen = <IntegracionesScreen onToast={showToast} />
   else screen = <PlaceholderScreen route={route} />
 
   return (

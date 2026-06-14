@@ -98,3 +98,15 @@ export async function replaceTemplateFields(templateId, fields, actorId) {
     await addFields(tx, commodityId, templateId, fields)
   }, { actorId })
 }
+
+/** Lista de plantillas (admin) con commodity y cantidad de campos. */
+export async function listTemplates() {
+  const r = await query(
+    `SELECT t.id, t.name, t.version, t.active, t.created_at,
+            c.code AS commodity_code, c.name AS commodity_name,
+            (SELECT COUNT(*) FROM qc.template_defects td WHERE td.template_id=t.id) AS fields
+     FROM qc.metric_templates t
+     JOIN qc.commodities c ON c.id=t.commodity_id
+     ORDER BY c.name ASC, t.version DESC`)
+  return r.recordset
+}
