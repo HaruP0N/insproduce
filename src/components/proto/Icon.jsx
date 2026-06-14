@@ -1,0 +1,73 @@
+// Set de íconos del prototipo (Lucide-style, stroke 1.7). Portado tal cual.
+export function Icon({ name, size = 18, stroke = 1.7, className = '', style }) {
+  const p = PATHS[name] || PATHS.square
+  return (
+    <svg className={'ico ' + className} style={style} width={size} height={size} viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {p}
+    </svg>
+  )
+}
+
+const PATHS = {
+  square: <rect x="4" y="4" width="16" height="16" rx="3" />,
+  dashboard: <><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="11" width="8" height="10" rx="1.5"/><rect x="3" y="14" width="8" height="7" rx="1.5"/></>,
+  clipboard: <><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 4v1H9V4Z"/><path d="M9 11h6M9 15h4"/></>,
+  users: <><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.2a3.2 3.2 0 0 1 0 6M17.5 20a5.5 5.5 0 0 0-2.2-4.4"/></>,
+  boxes: <><path d="M12 3.5 4 7v5l8 3.5L20 12V7l-8-3.5Z"/><path d="M4 7l8 3.5M20 7l-8 3.5M12 10.5V21"/><path d="M4 12v5l8 3.5 8-3.5v-5"/></>,
+  report: <><path d="M6 3h8l4 4v14H6V3Z"/><path d="M14 3v4h4"/><path d="M9 13l2 2 4-4"/></>,
+  commodity: <><path d="M12 8c0-2.5 2-4.5 5-4.5 0 3-2 5-5 5"/><path d="M12 21c-3.3 0-6-2.7-6-6 0-3 2-5.5 6-7 4 1.5 6 4 6 7 0 3.3-2.7 6-6 6Z"/></>,
+  tolerance: <><path d="M12 3v18"/><path d="M5 7h14M5 7l-2.5 5a2.8 2.8 0 0 0 5 0L5 7Zm14 0-2.5 5a2.8 2.8 0 0 0 5 0L19 7Z"/></>,
+  template: <><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9h16M9 9v11"/></>,
+  settings: <><circle cx="12" cy="12" r="3"/><path d="M12 2.5v2.5M12 19v2.5M4.2 7l2.1 1.2M17.7 15.8l2.1 1.2M4.2 17l2.1-1.2M17.7 8.2l2.1-1.2"/></>,
+  plug: <><path d="M9 3v5M15 3v5"/><path d="M7 8h10v3a5 5 0 0 1-10 0V8Z"/><path d="M12 16v5"/></>,
+  search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></>,
+  plus: <><path d="M12 5v14M5 12h14"/></>,
+  bell: <><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z"/><path d="M10 19a2 2 0 0 0 4 0"/></>,
+  sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></>,
+  moon: <path d="M20 14.5A8 8 0 0 1 9.5 4a7 7 0 1 0 10.5 10.5Z"/>,
+  filter: <path d="M4 5h16l-6.5 8v5l-3 1.5V13L4 5Z"/>,
+  chevDown: <path d="m6 9 6 6 6-6"/>,
+  chevRight: <path d="m9 6 6 6-6 6"/>,
+  chevLeft: <path d="m15 6-6 6 6 6"/>,
+  arrowUp: <path d="M12 19V5M6 11l6-6 6 6"/>,
+  arrowDown: <path d="M12 5v14M6 13l6 6 6-6"/>,
+  trendUp: <><path d="M3 17 9 11l4 4 8-8"/><path d="M15 7h6v6"/></>,
+  check: <path d="M5 12.5 10 17.5 19.5 7"/>,
+  checkCircle: <><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5L16 9"/></>,
+  warnCircle: <><circle cx="12" cy="12" r="9"/><path d="M12 8v4.5M12 16h.01"/></>,
+  xCircle: <><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/></>,
+  x: <path d="M6 6l12 12M18 6 6 18"/>,
+  calendar: <><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 9h16M8 3v4M16 3v4"/></>,
+  user: <><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></>,
+  mapPin: <><path d="M12 21s-6.5-5.3-6.5-10a6.5 6.5 0 0 1 13 0c0 4.7-6.5 10-6.5 10Z"/><circle cx="12" cy="11" r="2.3"/></>,
+  flask: <><path d="M9 3h6M10 3v6l-5 8.5A2 2 0 0 0 6.7 21h10.6a2 2 0 0 0 1.7-3L14 9V3"/><path d="M7.5 15h9"/></>,
+  grape: <><path d="M12 4v3"/><path d="M12 4c1.5 0 2.5-1 2.5-2"/><circle cx="12" cy="9.5" r="2"/><circle cx="8.5" cy="12.5" r="2"/><circle cx="15.5" cy="12.5" r="2"/><circle cx="10.2" cy="16" r="2"/><circle cx="13.8" cy="16" r="2"/><circle cx="12" cy="19" r="2"/></>,
+  download: <><path d="M12 3v12M7 11l5 5 5-5"/><path d="M4 21h16"/></>,
+  dots: <><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></>,
+  eye: <><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></>,
+  edit: <><path d="M4 20h4L18.5 9.5a2 2 0 0 0-2.8-2.8L5 17.2 4 20Z"/><path d="M14 7l3 3"/></>,
+  clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></>,
+  layers: <><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/></>,
+  scale: <><path d="M12 3a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"/><path d="M12 6v13M7 19h10"/><path d="M5 7l14-1.5"/><path d="M5 7 2.8 12.5a2.6 2.6 0 0 0 4.6 0L5 7Zm14-1.5-2.2 5.5a2.6 2.6 0 0 0 4.6 0L19 5.5Z"/></>,
+  trash: <><path d="M5 7h14M9 7V5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 5v2"/><path d="M7 7l1 13h8l1-13"/></>,
+  logout: <><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M9 12h11M16 8l4 4-4 4"/></>,
+  sparkle: <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/>,
+  sliders: <><path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/></>,
+  thermometer: <><path d="M12 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0Z"/><path d="M10 14.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"/></>,
+  ruler: <><rect x="2.5" y="8" width="19" height="8" rx="1.5"/><path d="M7 8v3M11 8v4M15 8v3M19 8v4"/></>,
+  droplet: <path d="M12 3.5s5.5 5.6 5.5 9.5a5.5 5.5 0 0 1-11 0c0-3.9 5.5-9.5 5.5-9.5Z"/>,
+  camera: <><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.2"/></>,
+  image: <><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="m4 17 4.5-4.5L13 17l3-3 4 4"/></>,
+  inbox: <><path d="M4 13l2.5-7h11L20 13"/><path d="M4 13v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5h-5a3 3 0 0 1-6 0H4Z"/></>,
+  clipboardCheck: <><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 4v1H9V4Z"/><path d="m9 13 2 2 4-4"/></>,
+  play: <path d="M7 5.5v13l11-6.5-11-6.5Z"/>,
+  save: <><path d="M5 4h11l3 3v13H5V4Z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></>,
+  leaf: <><path d="M4 20s.5-7 5-11.5S20 4 20 4s.5 7-4.5 11.5S4 20 4 20Z"/><path d="M4 20 14 10"/></>,
+  percent: <><path d="m6 18 12-12"/><circle cx="7.5" cy="7.5" r="2"/><circle cx="16.5" cy="16.5" r="2"/></>,
+  package: <><path d="M12 3.5 4 7v10l8 3.5L20 17V7l-8-3.5Z"/><path d="M4 7l8 3.5L20 7M12 10.5V21M8 5.2l8 3.6"/></>,
+  weight: <><circle cx="12" cy="8" r="2.5"/><path d="M9.5 8H7l-2.5 11h15L17 8h-2.5"/></>,
+  hash: <path d="M8 4 6.5 20M17.5 4 16 20M5 9h14M4 15h14"/>,
+  signal: <><path d="M5 19v-3M9.5 19v-7M14 19v-10M18.5 19V5"/></>,
+  list: <><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></>,
+}

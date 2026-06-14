@@ -2,8 +2,8 @@
 
 /* ===== Tokens del sistema de diseño (enterprise verde "agri") ===== */
 @theme {
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+  --font-sans: var(--font-ibm-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-ibm-mono), ui-monospace, "SF Mono", monospace;
 
   /* superficies */
   --color-canvas: #f6f8f6;   /* fondo de página */
@@ -24,16 +24,4 @@
   --color-brand-900: #14532d;
 }
 
-@layer base {
-  html { color-scheme: light; }
-  body {
-    background: var(--color-canvas);
-    color: #18181b;                 /* zinc-900 */
-    font-family: var(--font-sans);
-    -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
-  }
-  a { color: inherit; text-decoration: none; }
-  /* focus accesible consistente */
-  :focus-visible { outline: none; }
-}
+/* Estilos base globales los provee src/styles/ds.css (design system del prototipo). */

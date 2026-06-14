@@ -357,7 +357,7 @@ export async function listAll(limit = 500) {
   const r = await query(
     `SELECT TOP (${Number(limit) || 500})
             i.id, i.created_at, i.updated_at, c.code AS commodity_code, c.name AS commodity_name,
-            l.lot_code AS lot, l.variety, pr.name AS producer, i.created_by_user_id,
+            l.lot_code AS lot, l.variety, pr.name AS producer, i.created_by_user_id, u.name AS inspector_name,
             res.score, res.resolution,
             (SELECT TOP 1 status FROM qc.inspection_pdf_versions v WHERE v.inspection_id=i.id ORDER BY version DESC) AS pdf_status,
             (SELECT TOP 1 pdf_url FROM qc.inspection_pdf_versions v WHERE v.inspection_id=i.id ORDER BY version DESC) AS pdf_url
@@ -366,6 +366,7 @@ export async function listAll(limit = 500) {
      LEFT JOIN qc.pallets p ON p.id=i.pallet_id
      LEFT JOIN qc.lots l ON l.id=p.lot_id
      LEFT JOIN qc.producers pr ON pr.id=l.producer_id
+     LEFT JOIN qc.users u ON u.id=i.created_by_user_id
      LEFT JOIN qc.inspection_results res ON res.inspection_id=i.id
      WHERE i.deleted_at IS NULL
      ORDER BY i.created_at DESC`)
