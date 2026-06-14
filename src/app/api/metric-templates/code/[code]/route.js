@@ -1,62 +1,22 @@
 // src/app/api/metric-templates/code/[code]/route.js
-import { NextResponse } from 'next/server'
-import { query } from '@/lib/db/mssql'
-import { verifyTokenFromCookies } from '@/lib/auth/verifyToken'
-
-function safeJsonArray(v) {
-  if (!v) return []
-  try {
-    const parsed = typeof v === 'string' ? JSON.parse(v) : v
-    return Array.isArray(parsed) ? parsed : []
-  } catch { return [] }
-}
+import { requireAuth } from '@/lib/auth/requireAuth'
+import { ok, fail, serverError } from '@/lib/http'
+import { getTemplateFieldsByCommodityCode } from '@/lib/repos/catalog'
 
 export async function GET(req, context) {
-  const v = verifyTokenFromCookies(req)
-  if (!v.ok) return NextResponse.json({ msg: v.msg }, { status: v.status })
+  const auth = requireAuth(req)
+  if (auth.response) return auth.response
 
   const params = await context.params
   const code = String(params?.code || '').trim().toUpperCase()
-  if (!code) return NextResponse.json({ msg: 'code requerido' }, { status: 400 })
+  if (!code) return fail(400, 'code requerido')
 
   try {
-    const tRes = await query(
-      `SELECT TOP 1 id, name, version, commodity_code
-       FROM metric_templates
-       WHERE UPPER(commodity_code) = @code
-       ORDER BY version DESC, id DESC`,
-      { code }
-    )
-
-    const template = tRes.recordset?.[0]
-    if (!template) return NextResponse.json({ msg: `Commodity sin template: ${code}` }, { status: 404 })
-
-    const fRes = await query(
-      `SELECT [key], label, field_type, required, unit, min_value, max_value, options, order_index
-       FROM metric_fields
-       WHERE template_id = @template_id
-       ORDER BY order_index ASC, [key] ASC`,
-      { template_id: template.id }
-    )
-
-    const fields = (fRes.recordset || []).map(r => ({
-      key:         r.key,
-      label:       r.label,
-      field_type:  r.field_type,
-      required:    !!r.required,
-      unit:        r.unit        ?? null,
-      min_value:   r.min_value   ?? null,
-      max_value:   r.max_value   ?? null,
-      options:     safeJsonArray(r.options),
-      order_index: Number(r.order_index ?? 0)
-    }))
-
-    return NextResponse.json({
-      template: { id: template.id, name: template.name, version: template.version },
-      fields
-    })
+    const { template, fields } = await getTemplateFieldsByCommodityCode(code)
+    if (!template) return fail(404, `Commodity sin plantilla: ${code}`)
+    return ok({ template: { id: template.id, name: template.name, version: template.version }, fields })
   } catch (e) {
-    console.error('[metric-templates/code GET]', e)
-    return NextResponse.json({ msg: 'Error obteniendo template' }, { status: 500 })
+    if (e.status) return fail(e.status, e.message)
+    return serverError('metric-templates/code', e)
   }
 }

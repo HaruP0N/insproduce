@@ -1,38 +1,28 @@
 // src/app/api/inspecciones/[id]/pdf/route.js
 import { NextResponse } from 'next/server'
+import { requireAuth, authorizeOwnership } from '@/lib/auth/requireAuth'
+import { fail, serverError } from '@/lib/http'
 import { query } from '@/lib/db/mssql'
-import { verifyTokenFromCookies } from '@/lib/auth/verifyToken'
+import { getLatestPdf } from '@/lib/repos/inspections'
 
 export async function GET(req, context) {
-  const v = verifyTokenFromCookies(req)
-  if (!v.ok) return NextResponse.json({ msg: v.msg }, { status: v.status })
-
+  const auth = requireAuth(req)
+  if (auth.response) return auth.response
   try {
-    const params = await context.params
-    const id = Number(params?.id)
+    const { id } = await context.params
+    const nid = Number(id)
+    if (!Number.isInteger(nid) || nid <= 0) return fail(400, 'ID inválido')
 
-    if (!Number.isInteger(id) || id <= 0)
-      return NextResponse.json({ msg: 'ID inválido' }, { status: 400 })
+    const own = await query(`SELECT created_by_user_id FROM qc.inspections WHERE id=@id AND deleted_at IS NULL`, { id: nid })
+    if (!own.recordset?.length) return fail(404, 'Inspección no encontrada')
+    if (!authorizeOwnership(auth.user, [own.recordset[0].created_by_user_id])) return fail(403, 'Sin permiso sobre esta inspección')
 
-    const result = await query(
-      `SELECT pdf_url, status, error_message FROM inspection_pdfs WHERE inspection_id = @id`,
-      { id }
-    )
-
-    if (!result.recordset?.length)
-      return NextResponse.json({ msg: 'PDF no encontrado. Genera el PDF primero.' }, { status: 404 })
-
-    const { pdf_url, status, error_message } = result.recordset[0]
-
-    if (status === 'ERROR')
-      return NextResponse.json({ msg: `Error al generar PDF: ${error_message || 'Error desconocido'}` }, { status: 500 })
-
-    if (status === 'PENDING' || !pdf_url)
-      return NextResponse.json({ msg: 'PDF aún no generado.' }, { status: 404 })
-
-    return NextResponse.redirect(pdf_url, 302)
+    const pdf = await getLatestPdf(nid)
+    if (pdf?.status === 'ERROR') return fail(500, `Error al generar PDF: ${pdf.error_message || 'desconocido'}`)
+    if (!pdf || pdf.status === 'PENDING' || !pdf.pdf_url) return fail(404, 'PDF aún no generado.')
+    return NextResponse.redirect(pdf.pdf_url, 302)
   } catch (e) {
-    console.error('[pdf]', e)
-    return NextResponse.json({ msg: 'Error al obtener PDF: ' + e.message }, { status: 500 })
+    if (e.status) return fail(e.status, e.message)
+    return serverError('pdf', e)
   }
 }

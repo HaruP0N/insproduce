@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { jwtVerify } from 'jose'
 
-const PROTECTED_PREFIXES = ['/admin', '/ops']
+const PROTECTED_PREFIXES = ['/admin', '/inspector']
 
 function isProtected(pathname) {
   return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + '/'))
@@ -31,11 +31,11 @@ export async function middleware(req) {
     // ✅ reglas por rol
     if (pathname.startsWith('/admin') && role !== 'admin') {
       const url = req.nextUrl.clone()
-      url.pathname = '/ops'
+      url.pathname = '/inspector'
       return NextResponse.redirect(url)
     }
 
-    if (pathname.startsWith('/ops') && role !== 'inspector') {
+    if (pathname.startsWith('/inspector') && role !== 'inspector') {
       const url = req.nextUrl.clone()
       url.pathname = '/admin'
       return NextResponse.redirect(url)
@@ -51,5 +51,5 @@ export async function middleware(req) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/ops/:path*']
+  matcher: ['/admin/:path*', '/inspector/:path*']
 }

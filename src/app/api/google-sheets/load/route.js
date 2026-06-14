@@ -1,64 +1,34 @@
 // src/app/api/google-sheets/load/route.js
-import { NextResponse } from 'next/server'
-import { verifyTokenFromCookies } from '@/lib/auth/verifyToken'
+import { requireAuth } from '@/lib/auth/requireAuth'
+import { ok, fail, serverError } from '@/lib/http'
 import { sheetsClient } from '@/lib/googleSheets'
 import { query } from '@/lib/db/mssql'
 
 export async function GET(req) {
-  const v = verifyTokenFromCookies(req)
-  
-  if (!v.ok || !v.user || v.user.role !== 'admin') {
-    return NextResponse.json({ msg: 'No autorizado' }, { status: 403 })
-  }
-
+  const auth = requireAuth(req, { role: 'admin' })
+  if (auth.response) return auth.response
   try {
     const spreadsheetId = process.env.GOOGLE_SHEET_ID
-    
-    if (!spreadsheetId) {
-      return NextResponse.json({ 
-        msg: 'GOOGLE_SHEET_ID no configurado' 
-      }, { status: 400 })
-    }
+    if (!spreadsheetId) return fail(400, 'GOOGLE_SHEET_ID no configurado')
 
     const rows = await sheetsClient.readSheet(spreadsheetId)
-    
-    if (!rows || rows.length === 0) {
-      return NextResponse.json({ inspecciones: [] })
-    }
+    if (!rows || rows.length === 0) return ok({ inspecciones: [] })
 
     const inspecciones = sheetsClient.parseRows(rows)
-    
-    // ← NUEVO: Enriquecer con datos de la BD (commodity_code)
-    const enrichedInspecciones = []
-    
     for (const insp of inspecciones) {
       const idInspeccion = insp['ID Inspección'] || insp['ID'] || insp['id'] || ''
-      
-      if (idInspeccion) {
-        // Buscar en BD el commodity_code
-        try {
-          const result = await query(
-            `SELECT commodity_code FROM assignments WHERE id = @id`,
-            { id: parseInt(idInspeccion) }
-          )
-          
-          if (result.recordset?.length > 0) {
-            insp.commodity_code = result.recordset[0].commodity_code
-          }
-        } catch (err) {
-          console.error(`Error buscando commodity para assignment ${idInspeccion}:`, err)
-        }
-      }
-      
-      enrichedInspecciones.push(insp)
+      if (!idInspeccion) continue
+      try {
+        const r = await query(
+          `SELECT c.code AS commodity_code FROM qc.assignments a
+           LEFT JOIN qc.commodities c ON c.id = a.commodity_id WHERE a.id = @id`,
+          { id: parseInt(idInspeccion) })
+        if (r.recordset?.length) insp.commodity_code = r.recordset[0].commodity_code
+      } catch { /* fila sin id válido: se ignora */ }
     }
-    
-    return NextResponse.json({ inspecciones: enrichedInspecciones })
-
+    return ok({ inspecciones })
   } catch (e) {
-    console.error('[load]', e)
-    return NextResponse.json({ 
-      msg: 'Error al cargar: ' + e.message 
-    }, { status: 500 })
+    if (e.status) return fail(e.status, e.message)
+    return serverError('google-sheets/load', e)
   }
 }

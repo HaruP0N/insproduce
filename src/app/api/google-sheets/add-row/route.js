@@ -1,61 +1,30 @@
 // src/app/api/google-sheets/add-row/route.js
-import { NextResponse } from 'next/server'
-import { verifyTokenFromCookies } from '@/lib/auth/verifyToken'
+import { requireAuth } from '@/lib/auth/requireAuth'
+import { ok, fail, serverError } from '@/lib/http'
 import { sheetsClient } from '@/lib/googleSheets'
-import { query } from '@/lib/db/mssql'
+import { createAssignment } from '@/lib/repos/assignments'
 
 export async function POST(req) {
-  const v = verifyTokenFromCookies(req)
-  if (!v.ok || !v.user || v.user.role !== 'admin')
-    return NextResponse.json({ msg: 'No autorizado' }, { status: 403 })
-
+  const auth = requireAuth(req, { role: 'admin' })
+  if (auth.response) return auth.response
   try {
     const spreadsheetId = process.env.GOOGLE_SHEET_ID
-    if (!spreadsheetId)
-      return NextResponse.json({ msg: 'GOOGLE_SHEET_ID no configurado' }, { status: 400 })
+    if (!spreadsheetId) return fail(400, 'GOOGLE_SHEET_ID no configurado')
 
-    const body = await req.json()
+    const body = await req.json().catch(() => ({}))
     const { producer, lot, variety, commodity, inspector, estado } = body
+    const id = await createAssignment(
+      { lot, producer, variety, commodity, inspector_email: inspector }, auth.user.id)
 
-    if (!producer || !lot)
-      return NextResponse.json({ msg: 'Productor y Lote son obligatorios' }, { status: 400 })
-
-    let inspectorId = null
-    if (inspector) {
-      const userRes = await query(
-        `SELECT id FROM users WHERE email = @email AND role = 'inspector' AND active = 1`,
-        { email: inspector.trim().toLowerCase() }
-      )
-      if (userRes.recordset?.length > 0) inspectorId = userRes.recordset[0].id
-    }
-
-    const result = await query(
-      `INSERT INTO assignments (user_id, producer, lot, variety, commodity_code, status, created_at)
-       OUTPUT INSERTED.id
-       VALUES (@user_id, @producer, @lot, @variety, @commodity_code, 'pendiente', GETUTCDATE())`,
-      {
-        user_id:        inspectorId,
-        producer:       producer.trim(),
-        lot:            lot.trim(),
-        variety:        variety?.trim()   || null,
-        commodity_code: commodity?.trim() || null
-      }
-    )
-
-    const newAssignmentId = result.recordset[0].id
-
-    const rows    = await sheetsClient.readSheet(spreadsheetId)
+    const rows = await sheetsClient.readSheet(spreadsheetId)
     const nextRow = rows.length + 1
-
     await sheetsClient.writeSheet(
-      spreadsheetId,
-      `A${nextRow}:G${nextRow}`,
-      [[producer, lot, variety || '', commodity || '', inspector || '', estado || 'Pendiente', newAssignmentId]]
-    )
+      spreadsheetId, `A${nextRow}:G${nextRow}`,
+      [[producer, lot, variety || '', commodity || '', inspector || '', estado || 'Pendiente', id]])
 
-    return NextResponse.json({ msg: 'Asignación creada', id: newAssignmentId, rowNumber: nextRow })
+    return ok({ msg: 'Asignación creada', id, rowNumber: nextRow })
   } catch (e) {
-    console.error('[add-row]', e)
-    return NextResponse.json({ msg: 'Error al agregar: ' + e.message }, { status: 500 })
+    if (e.status) return fail(e.status, e.message)
+    return serverError('google-sheets/add-row', e)
   }
 }

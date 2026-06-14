@@ -1,31 +1,14 @@
-import { NextResponse } from 'next/server'
-import { query } from '@/lib/db/mssql'
-import { verifyTokenFromCookies } from '@/lib/auth/verifyToken'
+import { requireAuth } from '@/lib/auth/requireAuth'
+import { ok, fail, serverError } from '@/lib/http'
+import { listAll } from '@/lib/repos/inspections'
 
 export async function GET(req) {
-  const v = await verifyTokenFromCookies(req)
-  if (!v.ok) return NextResponse.json({ msg: v.msg }, { status: v.status })
-
-  if (v.user?.role !== 'admin') {
-    return NextResponse.json({ msg: 'Solo admin' }, { status: 403 })
-  }
-
+  const auth = requireAuth(req, { role: 'admin' })
+  if (auth.response) return auth.response
   try {
-    const r = await query(
-      `SELECT TOP 500
-         id, created_at, updated_at,
-         producer, lot, variety, caliber,
-         packaging_code, packaging_type, packaging_date,
-         notes, metrics,
-         created_by_user_id,
-         commodity_code, commodity_name,
-         pdf_status, pdf_url
-       FROM dbo.vw_inspections_admin
-       ORDER BY created_at DESC`
-    )
-    return NextResponse.json(r.recordset || [])
+    return ok(await listAll(500))
   } catch (e) {
-    console.error('[inspections/historial]', e)
-    return NextResponse.json({ msg: 'Error historial' }, { status: 500 })
+    if (e.status) return fail(e.status, e.message)
+    return serverError('inspecciones/historial', e)
   }
 }

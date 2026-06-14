@@ -1,9 +1,20 @@
 // src/lib/auth/verifyToken.js
 import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'tu-secreto-super-seguro-cambiar-en-produccion'
+function getSecret() {
+  const s = process.env.JWT_SECRET
+  if (!s) throw new Error('JWT_SECRET_MISSING')
+  return s
+}
 
 export function verifyTokenFromCookies(req) {
+  let secret
+  try {
+    secret = getSecret()
+  } catch {
+    return { ok: false, msg: 'Error de configuración del servidor', status: 500 }
+  }
+
   try {
     const cookieHeader = req.headers.get('cookie')
     if (!cookieHeader) return { ok: false, msg: 'No autenticado', status: 401 }
@@ -18,7 +29,7 @@ export function verifyTokenFromCookies(req) {
     const token = cookies.token
     if (!token) return { ok: false, msg: 'Token no encontrado', status: 401 }
 
-    const decoded = jwt.verify(token, JWT_SECRET)
+    const decoded = jwt.verify(token, secret)
     return { ok: true, user: decoded }
 
   } catch (e) {
@@ -28,6 +39,13 @@ export function verifyTokenFromCookies(req) {
 }
 
 export function verifyTokenFromRequest(req) {
+  let secret
+  try {
+    secret = getSecret()
+  } catch {
+    return { ok: false, msg: 'Error de configuración del servidor', status: 500 }
+  }
+
   try {
     const authHeader = req.headers.get('authorization')
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -35,7 +53,7 @@ export function verifyTokenFromRequest(req) {
     }
 
     const token = authHeader.substring(7)
-    const decoded = jwt.verify(token, JWT_SECRET)
+    const decoded = jwt.verify(token, secret)
     return { ok: true, user: decoded }
 
   } catch (e) {
