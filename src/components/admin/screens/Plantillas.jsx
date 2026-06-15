@@ -2,18 +2,20 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Card } from '@/components/proto/ui'
 import { Icon } from '@/components/proto/Icon'
+import { useI18n } from '@/lib/i18n'
 import { Modal, Field, RowAction, ScreenState } from './_ui'
 import { fechaCorta } from '@/lib/proto'
 import { commodityVisual } from '@/lib/inspectorData'
 import { listTemplates, getTemplate, createTemplate, updateTemplateFields, listCommodities } from '@/lib/adminCrud'
 
-const FAMILIES = [{ v: 'quality', l: 'Calidad' }, { v: 'condition', l: 'Condición' }, { v: 'packaging', l: 'Embalaje' }, { v: 'measurement', l: 'Medición' }]
-const TYPES = [{ v: 'number', l: 'Número' }, { v: 'select', l: 'Selección' }, { v: 'boolean', l: 'Sí/No' }, { v: 'text', l: 'Texto' }]
+const FAMILIES = ['quality', 'condition', 'packaging', 'measurement']
+const TYPES = ['number', 'select', 'boolean', 'text']
 
 const splitKey = (k) => { const i = String(k).indexOf('.'); return i === -1 ? ['quality', k] : [k.slice(0, i), k.slice(i + 1)] }
 const blankRow = () => ({ family: 'quality', code: '', label: '', field_type: 'number', unit: '%', required: false, options: '' })
 
 function TemplateModal({ tpl, commodities, onClose, onSaved, onToast }) {
+  const { t } = useI18n()
   const editing = !!tpl
   const [commodityCode, setCommodityCode] = useState(commodities[0]?.code || '')
   const [name, setName] = useState('')
@@ -28,7 +30,7 @@ function TemplateModal({ tpl, commodities, onClose, onSaved, onToast }) {
       setCommodityCode(d.template?.commodity_code || '')
       const fr = (d.fields || []).map(f => { const [family, code] = splitKey(f.key); return { family, code, label: f.label || '', field_type: f.field_type || 'number', unit: f.unit || '', required: !!f.required, options: Array.isArray(f.options) ? f.options.map(o => o.value ?? o).join(', ') : '' } })
       setRows(fr.length ? fr : [blankRow()])
-    }).catch(e => onToast({ title: 'Error', sub: e.message, bad: true })).finally(() => setLoading(false))
+    }).catch(e => onToast({ title: t('common.error'), sub: e.message, bad: true })).finally(() => setLoading(false))
   }, [editing, tpl])
 
   const setRow = (i, k, v) => setRows(rs => rs.map((r, j) => j === i ? { ...r, [k]: v } : r))
@@ -46,57 +48,57 @@ function TemplateModal({ tpl, commodities, onClose, onSaved, onToast }) {
 
   const submit = async () => {
     const fields = buildFields()
-    if (!editing && (!name.trim() || !commodityCode)) return onToast({ title: 'Faltan datos', sub: 'Commodity y nombre obligatorios', bad: true })
-    if (fields.length === 0) return onToast({ title: 'Sin campos', sub: 'Agrega al menos un campo válido (código + etiqueta)', bad: true })
+    if (!editing && (!name.trim() || !commodityCode)) return onToast({ title: t('common.missingData'), sub: t('tpl.needData'), bad: true })
+    if (fields.length === 0) return onToast({ title: t('tpl.noFieldsTitle'), sub: t('tpl.noFields'), bad: true })
     setBusy(true)
     try {
-      if (editing) { await updateTemplateFields(tpl.id, fields); onToast({ title: 'Plantilla actualizada', sub: name }) }
-      else { const r = await createTemplate({ commodityCode, name, fields }); onToast({ title: 'Plantilla creada', sub: `v${r.version}` }) }
+      if (editing) { await updateTemplateFields(tpl.id, fields); onToast({ title: t('tpl.updated'), sub: name }) }
+      else { const r = await createTemplate({ commodityCode, name, fields }); onToast({ title: t('tpl.created'), sub: `v${r.version}` }) }
       onSaved()
-    } catch (e) { onToast({ title: 'Error', sub: e.message, bad: true }) }
+    } catch (e) { onToast({ title: t('common.error'), sub: e.message, bad: true }) }
     finally { setBusy(false) }
   }
 
   return (
-    <Modal size="lg" title={editing ? `Editar plantilla — ${tpl.commodity_name} v${tpl.version}` : 'Nueva plantilla'} icon="template" onClose={onClose}
-      footer={<><button className="btn" onClick={onClose} disabled={busy}>Cancelar</button><button className="btn btn-primary" onClick={submit} disabled={busy || loading}><Icon name="check" size={15} />{busy ? 'Guardando…' : (editing ? 'Guardar campos' : 'Crear plantilla')}</button></>}>
-      {loading ? <div className="empty" style={{ padding: 40 }}><Icon name="clock" size={18} /> Cargando…</div> : (
+    <Modal size="lg" title={editing ? t('tpl.editTitle', { name: tpl.commodity_name, ver: tpl.version }) : t('tpl.new')} icon="template" onClose={onClose}
+      footer={<><button className="btn" onClick={onClose} disabled={busy}>{t('common.cancel')}</button><button className="btn btn-primary" onClick={submit} disabled={busy || loading}><Icon name="check" size={15} />{busy ? t('common.saving') : (editing ? t('tpl.editFields') : t('tpl.createTpl'))}</button></>}>
+      {loading ? <div className="empty" style={{ padding: 40 }}><Icon name="clock" size={18} /> {t('common.loading')}</div> : (
         <>
           {!editing && (
             <div className="form-grid">
-              <Field label="Commodity" required>
+              <Field label={t('tbl.commodity')} required>
                 <select className="select" value={commodityCode} onChange={e => setCommodityCode(e.target.value)}>
                   {commodities.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
                 </select>
               </Field>
-              <Field label="Nombre" required><input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="Estándar de exportación" /></Field>
+              <Field label={t('tbl.nombre')} required><input className="input" value={name} onChange={e => setName(e.target.value)} placeholder={t('tpl.namePh')} /></Field>
             </div>
           )}
-          {editing && <div className="form-help" style={{ marginBottom: 12 }}>Editar reemplaza los campos de esta versión de la plantilla.</div>}
+          {editing && <div className="form-help" style={{ marginBottom: 12 }}>{t('tpl.editReplaces')}</div>}
 
-          <div className="field-label" style={{ marginBottom: 8 }}>Campos / defectos</div>
+          <div className="field-label" style={{ marginBottom: 8 }}>{t('tpl.fieldsDefects')}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {rows.map((r, i) => (
               <div key={i} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr 1.3fr 1fr', gap: 8, marginBottom: 8 }}>
-                  <select className="select" value={r.family} onChange={e => setRow(i, 'family', e.target.value)}>{FAMILIES.map(f => <option key={f.v} value={f.v}>{f.l}</option>)}</select>
-                  <input className="input mono" value={r.code} onChange={e => setRow(i, 'code', e.target.value)} placeholder="código" />
-                  <input className="input" value={r.label} onChange={e => setRow(i, 'label', e.target.value)} placeholder="Etiqueta visible" />
-                  <select className="select" value={r.field_type} onChange={e => setRow(i, 'field_type', e.target.value)}>{TYPES.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}</select>
+                  <select className="select" value={r.family} onChange={e => setRow(i, 'family', e.target.value)}>{FAMILIES.map(f => <option key={f} value={f}>{t('fam.' + f)}</option>)}</select>
+                  <input className="input mono" value={r.code} onChange={e => setRow(i, 'code', e.target.value)} placeholder={t('tpl.codePh')} />
+                  <input className="input" value={r.label} onChange={e => setRow(i, 'label', e.target.value)} placeholder={t('tpl.labelPh')} />
+                  <select className="select" value={r.field_type} onChange={e => setRow(i, 'field_type', e.target.value)}>{TYPES.map(ty => <option key={ty} value={ty}>{t('ft.' + ty)}</option>)}</select>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   {r.field_type === 'select'
-                    ? <input className="input" style={{ flex: 1, minWidth: 180 }} value={r.options} onChange={e => setRow(i, 'options', e.target.value)} placeholder="Opciones separadas por coma" />
-                    : <input className="input mono" style={{ width: 90 }} value={r.unit} onChange={e => setRow(i, 'unit', e.target.value)} placeholder="unidad" />}
+                    ? <input className="input" style={{ flex: 1, minWidth: 180 }} value={r.options} onChange={e => setRow(i, 'options', e.target.value)} placeholder={t('tpl.optionsPh')} />
+                    : <input className="input mono" style={{ width: 90 }} value={r.unit} onChange={e => setRow(i, 'unit', e.target.value)} placeholder={t('tpl.unitPh')} />}
                   <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text-dim)', cursor: 'pointer' }}>
-                    <button type="button" className={'switch' + (r.required ? ' on' : '')} onClick={() => setRow(i, 'required', !r.required)} />Obligatorio
+                    <button type="button" className={'switch' + (r.required ? ' on' : '')} onClick={() => setRow(i, 'required', !r.required)} />{t('tpl.required')}
                   </label>
-                  <button className="btn btn-icon btn-sm" style={{ marginLeft: 'auto', color: 'var(--red)' }} title="Quitar campo" onClick={() => rmRow(i)} disabled={rows.length === 1}><Icon name="trash" size={15} /></button>
+                  <button className="btn btn-icon btn-sm" style={{ marginLeft: 'auto', color: 'var(--red)' }} title={t('common.delete')} onClick={() => rmRow(i)} disabled={rows.length === 1}><Icon name="trash" size={15} /></button>
                 </div>
               </div>
             ))}
           </div>
-          <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={addRow}><Icon name="plus" size={14} />Agregar campo</button>
+          <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={addRow}><Icon name="plus" size={14} />{t('tpl.addField')}</button>
         </>
       )}
     </Modal>
@@ -104,6 +106,7 @@ function TemplateModal({ tpl, commodities, onClose, onSaved, onToast }) {
 }
 
 export default function PlantillasScreen({ onToast }) {
+  const { t } = useI18n()
   const [rows, setRows] = useState([])
   const [commodities, setCommodities] = useState([])
   const [loading, setLoading] = useState(true)
@@ -119,25 +122,25 @@ export default function PlantillasScreen({ onToast }) {
   return (
     <div className="content-inner fade-up">
       <div className="crud-toolbar">
-        <span style={{ fontSize: 13, color: 'var(--text-faint)' }}>{rows.length} plantilla(s)</span>
-        <button className="btn btn-primary" style={{ marginLeft: 'auto' }} onClick={() => setModal({})}><Icon name="plus" size={15} stroke={2.2} />Nueva plantilla</button>
+        <span style={{ fontSize: 13, color: 'var(--text-faint)' }}>{t('tpl.count', { n: rows.length })}</span>
+        <button className="btn btn-primary" style={{ marginLeft: 'auto' }} onClick={() => setModal({})}><Icon name="plus" size={15} stroke={2.2} />{t('tpl.new')}</button>
       </div>
       <Card pad={true}>
-        <ScreenState loading={loading} error={error} empty={!loading && !error && rows.length === 0} emptyIcon="template" emptyText="No hay plantillas.">
+        <ScreenState loading={loading} error={error} empty={!loading && !error && rows.length === 0} emptyIcon="template" emptyText={t('tpl.empty')}>
           <table className="tbl">
-            <thead><tr><th>Plantilla</th><th>Commodity</th><th className="num">Versión</th><th className="num">Campos</th><th>Estado</th><th>Creada</th><th></th></tr></thead>
+            <thead><tr><th>{t('nav.plantillas')}</th><th>{t('tbl.commodity')}</th><th className="num">{t('tpl.version')}</th><th className="num">{t('tpl.fields')}</th><th>{t('tbl.estado')}</th><th>{t('tbl.creado')}</th><th></th></tr></thead>
             <tbody>
-              {rows.map(t => {
-                const v = commodityVisual(t.commodity_code)
+              {rows.map(tp => {
+                const v = commodityVisual(tp.commodity_code)
                 return (
-                  <tr key={t.id}>
-                    <td className="cell-strong">{t.name}</td>
+                  <tr key={tp.id}>
+                    <td className="cell-strong">{tp.name}</td>
                     <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5 }}><span className={'commodity-ico ' + v.key} style={{ width: 24, height: 24, borderRadius: 6 }}><Icon name={v.icon} size={13} /></span>{v.label}</span></td>
-                    <td className="num mono">v{t.version}</td>
-                    <td className="num">{t.fields}</td>
-                    <td>{t.active ? <span className="badge green" style={{ height: 22, fontSize: 11 }}>Activa</span> : <span className="pill-tag" style={{ color: 'var(--text-faint)' }}>Inactiva</span>}</td>
-                    <td className="mono" style={{ color: 'var(--text-faint)', fontSize: 12 }}>{fechaCorta(t.created_at)}</td>
-                    <td style={{ width: 50 }}><span className="row-actions"><RowAction icon="edit" title="Editar campos" onClick={() => setModal({ tpl: t })} /></span></td>
+                    <td className="num mono">v{tp.version}</td>
+                    <td className="num">{tp.fields}</td>
+                    <td>{tp.active ? <span className="badge green" style={{ height: 22, fontSize: 11 }}>{t('tpl.activeBadge')}</span> : <span className="pill-tag" style={{ color: 'var(--text-faint)' }}>{t('tpl.inactiveBadge')}</span>}</td>
+                    <td className="mono" style={{ color: 'var(--text-faint)', fontSize: 12 }}>{fechaCorta(tp.created_at)}</td>
+                    <td style={{ width: 50 }}><span className="row-actions"><RowAction icon="edit" title={t('tpl.editFields')} onClick={() => setModal({ tpl: tp })} /></span></td>
                   </tr>
                 )
               })}

@@ -1,6 +1,7 @@
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import "@/styles/ds.css";
+import { I18nProvider } from "@/lib/i18n";
 
 const ibmSans = IBM_Plex_Sans({ variable: "--font-ibm-sans", subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 const ibmMono = IBM_Plex_Mono({ variable: "--font-ibm-mono", subsets: ["latin"], weight: ["400", "500", "600"] });
@@ -17,7 +18,7 @@ export default function RootLayout({ children }) {
     <html lang="es" data-theme="light" className={`${ibmSans.variable} ${ibmMono.variable}`} suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeInit }} /></head>
       <body>
-        {children}
+        <I18nProvider>{children}</I18nProvider>
       </body>
     </html>
   );

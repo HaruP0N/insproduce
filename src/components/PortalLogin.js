@@ -1,318 +1,133 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { setToken } from '@/lib/auth/clientToken'
+import { useI18n, LangToggle } from '@/lib/i18n'
+import { Icon } from '@/components/proto/Icon'
 
+// state: 'idle' | 'admin' | 'ops'  (ops = inspector)
 export default function PortalLogin() {
   const router = useRouter()
-  const [mode, setMode] = useState(null) // null | 'admin' | 'inspector'
+  const { t } = useI18n()
+  const [state, setState] = useState('idle')
+  const [theme, setTheme] = useState('light')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  const expectedRole = mode
+  useEffect(() => { setTheme(document.documentElement.dataset.theme || 'light') }, [])
+  useEffect(() => { document.documentElement.dataset.theme = theme; try { localStorage.setItem('insp-theme', theme) } catch {} }, [theme])
+  useEffect(() => {
+    const h = (e) => { if (e.key === 'Escape') setState('idle') }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [])
+
+  const open = (which) => { setError(''); setState(which) }
+  const close = () => { setError(''); setState('idle') }
+  const onPanelClick = (which) => { if (state !== 'idle' && state !== which) open(which) }
 
   const handleLogin = async (e) => {
     e.preventDefault()
-    if (!expectedRole) return
-
-    setLoading(true)
-
+    const expectedRole = state === 'admin' ? 'admin' : 'inspector'
+    setLoading(true); setError('')
     try {
       const r = await fetch('/api/auth/login', {
-        method: 'POST',
-        credentials: 'include',
+        method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: email.trim(),
-          password: password.trim()
-        })
+        body: JSON.stringify({ email: email.trim(), password: password.trim() }),
       })
-
-      const data = await r.json()
-      if (!r.ok) throw new Error(data?.msg || 'Error de login')
-
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data?.msg || t('portal.loginErr'))
       if (data.role !== expectedRole) {
-        throw new Error(
-          expectedRole === 'admin'
-            ? 'Este acceso es solo para Administración.'
-            : 'Este acceso es solo para Operaciones (Inspector).'
-        )
+        throw new Error(expectedRole === 'admin' ? t('portal.roleErrAdmin') : t('portal.roleErrOps'))
       }
-
       setToken(data.token)
-
-      if (data.role === 'admin') router.push('/admin')
-      if (data.role === 'inspector') router.push('/inspector')
+      router.push(data.role === 'admin' ? '/admin' : '/inspector')
     } catch (err) {
-      alert(err?.message || 'No se pudo iniciar sesión')
+      setError(err?.message || t('portal.loginErr'))
     } finally {
       setLoading(false)
     }
   }
 
+  const renderPanel = (which, dom, icoName) => {
+    const isOpen = state === which
+    return (
+      <section className={'panel ' + (which === 'admin' ? 'admin' : 'ops')} onClick={() => onPanelClick(which)}>
+        <div className="bg" style={{ backgroundImage: `url('/bg-${which === 'admin' ? 'admin' : 'ops'}.jpg')` }} />
+        <div className="tint" />
+        <div className="pcontent">
+          <span className={'badge ' + (which === 'admin' ? 'amber' : 'green') + ' domain-badge'}><span className="dot" />{t(dom + '.badge')}</span>
+          <h1 className="p-title">{t(dom + '.title')}</h1>
+          <p className="p-blurb">{t(dom + '.blurb')}</p>
+          <button className="p-cta" type="button" onClick={(e) => { e.stopPropagation(); open(which) }}>
+            {t(dom + '.cta')}<Icon name="chevRight" size={17} stroke={2.2} />
+          </button>
+          <div className="meta-row"><span>{t(dom + '.m1')}</span><span className="dotsep" /><span>{t(dom + '.m2')}</span><span className="dotsep" /><span>{t(dom + '.m3')}</span></div>
+        </div>
+
+        <form className={'login ' + (which === 'admin' ? 'admin' : 'ops')} onSubmit={handleLogin} onClick={(e) => e.stopPropagation()} autoComplete="on" noValidate>
+          <div className="login-head">
+            <div className="lh-left">
+              <div className="lh-ico"><Icon name={icoName} size={18} /></div>
+              <div>
+                <h2>{t(dom + '.badge')}</h2>
+                <div className="h-sub">{t(dom + '.loginSub')}</div>
+              </div>
+            </div>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); close() }}>
+              <Icon name="chevLeft" size={14} stroke={2.2} />{t('portal.back')}
+            </button>
+          </div>
+          <div className="field">
+            <label className="field-label">{t('login.email')}</label>
+            <input className="input" type="email" name="email" placeholder={which === 'admin' ? 'nombre@insproduce.cl' : 'inspector@insproduce.cl'}
+              autoComplete="username" value={isOpen ? email : ''} onChange={e => setEmail(e.target.value)} />
+          </div>
+          <div className="field">
+            <label className="field-label">{t('login.password')}</label>
+            <input className="input" type="password" name="password" placeholder="••••••••"
+              autoComplete="current-password" value={isOpen ? password : ''} onChange={e => setPassword(e.target.value)} />
+          </div>
+          {isOpen && error && <div style={{ fontSize: 12.5, color: 'var(--red)', marginBottom: 10 }}>{error}</div>}
+          <button className="btn btn-primary btn-submit" type="submit" disabled={loading}>{loading ? t('login.signingIn') : t('login.signIn')}</button>
+          <div className="login-foot">
+            <span style={{ fontSize: 12.5, color: 'var(--text-faint)' }}>{t('portal.sso')}</span>
+            <a className="forgot" href="#" onClick={(e) => e.preventDefault()}>{t('portal.forgot')}</a>
+          </div>
+        </form>
+      </section>
+    )
+  }
+
   return (
-    <div style={styles.wrap}>
-      {/* TOP BAR */}
-      <div style={styles.topbar}>
-        <img src="/logo-insproduce.png" alt="Insproduce" style={styles.logo} />
-      </div>
-
-      <div style={styles.grid}>
-        {/* ADMIN */}
-        <section
-          style={{
-            ...styles.panel,
-            backgroundImage:
-              "linear-gradient(rgba(232,176,74,.72), rgba(232,176,74,.72)), url('/bg-admin.jpg')"
-          }}
-        >
-          <div style={styles.panelContent}>
-            <div style={styles.kicker}>ADMINISTRACIÓN</div>
-            <h1 style={styles.title}>GESTIÓN Y REPORTES</h1>
-            <p style={styles.desc}>
-              Monitoreo de calidad, análisis de datos en Azure SQL y visualización de indicadores clave.
-            </p>
-
-            {mode !== 'admin' ? (
-              <button
-                style={styles.btnGhost}
-                onClick={() => setMode('admin')}
-              >
-                VER DASHBOARD
-              </button>
-            ) : (
-              <LoginCard
-                title="Iniciar sesión — Administración"
-                email={email}
-                password={password}
-                setEmail={setEmail}
-                setPassword={setPassword}
-                loading={loading}
-                onSubmit={handleLogin}
-                onBack={() => setMode(null)}
-                themeColor="#E8B04A"
-              />
-            )}
+    <div className="portal">
+      <header className="portal-top">
+        <div className="portal-brand">
+          <div className="mark"><img src="/logo-mark.png" alt="Insproduce" /></div>
+          <div>
+            <div className="brand-name">Insproduce</div>
+            <div className="brand-sub">Quality Control</div>
           </div>
-        </section>
+        </div>
+        <div className="right">
+          <LangToggle title={t('topbar.language')} />
+          <button className="btn btn-icon" type="button" title={t('topbar.theme')} onClick={() => setTheme(th => th === 'dark' ? 'light' : 'dark')}>
+            <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
+          </button>
+          <a className="help-link" href="#" onClick={(e) => e.preventDefault()}>
+            <Icon name="warnCircle" size={16} />{t('portal.help')}
+          </a>
+        </div>
+      </header>
 
-        {/* INSPECTOR */}
-        <section
-          style={{
-            ...styles.panel,
-            backgroundImage:
-              "linear-gradient(rgba(46,125,50,.72), rgba(46,125,50,.72)), url('/bg-ops.jpg')"
-          }}
-        >
-          <div style={styles.panelContent}>
-            <div style={styles.kicker}>OPERACIONES</div>
-            <h1 style={styles.title}>INSPECCIÓN DE CAMPO</h1>
-            <p style={styles.desc}>
-              Registro rápido de auditorías, documentación y reportes de estado de fruta.
-            </p>
-
-            {mode !== 'inspector' ? (
-              <button
-                style={styles.btnGhost}
-                onClick={() => setMode('inspector')}
-              >
-                NUEVA INSPECCIÓN
-              </button>
-            ) : (
-              <LoginCard
-                title="Iniciar sesión — Operaciones"
-                email={email}
-                password={password}
-                setEmail={setEmail}
-                setPassword={setPassword}
-                loading={loading}
-                onSubmit={handleLogin}
-                onBack={() => setMode(null)}
-                themeColor="#2E7D32"
-              />
-            )}
-          </div>
-        </section>
-      </div>
+      <main className="stage" data-state={state}>
+        {renderPanel('admin', 'portal.admin', 'dashboard')}
+        {renderPanel('ops', 'portal.ops', 'clipboardCheck')}
+      </main>
     </div>
   )
-}
-
-function LoginCard({
-  title,
-  email,
-  password,
-  setEmail,
-  setPassword,
-  loading,
-  onSubmit,
-  onBack,
-  themeColor
-}) {
-  return (
-    <form onSubmit={onSubmit} style={styles.card}>
-      <div style={styles.cardHeader}>
-        <strong>{title}</strong>
-        <button
-          type="button"
-          onClick={onBack}
-          style={styles.backBtn}
-        >
-          Volver
-        </button>
-      </div>
-
-      <input
-        style={{ ...styles.input, borderColor: themeColor }}
-        placeholder="Email"
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        required
-      />
-
-      <input
-        style={{ ...styles.input, borderColor: themeColor }}
-        placeholder="Contraseña"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        required
-      />
-
-      <button
-        disabled={loading}
-        type="submit"
-        style={{
-          ...styles.btnSolid,
-          background: themeColor
-        }}
-      >
-        {loading ? 'INGRESANDO...' : 'INICIAR SESIÓN'}
-      </button>
-    </form>
-  )
-}
-
-const styles = {
-  wrap: {
-    minHeight: '100vh',
-    background: '#fff'
-  },
-
-  topbar: {
-    height: 90,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-
-  logo: {
-    height: 60,
-    width: 'auto',
-    objectFit: 'contain'
-  },
-
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    minHeight: 'calc(100vh - 90px)'
-  },
-
-  panel: {
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    color: '#fff',
-    display: 'flex'
-  },
-
-  panelContent: {
-    width: '100%',
-    padding: 48,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    textAlign: 'center'
-  },
-
-  kicker: {
-    letterSpacing: 4,
-    opacity: 0.9,
-    fontSize: 12
-  },
-
-  title: {
-    margin: 0,
-    fontSize: 44,
-    lineHeight: 1.05,
-    fontWeight: 800
-  },
-
-  desc: {
-    margin: 0,
-    maxWidth: 520,
-    opacity: 0.95
-  },
-
-  btnGhost: {
-    marginTop: 10,
-    background: 'transparent',
-    color: '#fff',
-    border: '2px solid rgba(255,255,255,.75)',
-    padding: '12px 26px',
-    borderRadius: 14,
-    fontWeight: 800,
-    cursor: 'pointer'
-  },
-
-  card: {
-    marginTop: 18,
-    width: 620,
-    maxWidth: '95%',
-    background: 'rgba(255,255,255,.92)',
-    color: '#111',
-    borderRadius: 16,
-    padding: 18,
-    boxShadow: '0 10px 30px rgba(0,0,0,.18)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12
-  },
-
-  cardHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-
-  backBtn: {
-    border: 'none',
-    background: 'transparent',
-    cursor: 'pointer',
-    fontWeight: 700
-  },
-
-  input: {
-    width: '100%',
-    padding: 14,
-    borderRadius: 12,
-    border: '2px solid',
-    fontSize: 16,
-    backgroundColor: '#ffffff',
-    color: '#111827'
-  },
-
-  btnSolid: {
-    marginTop: 4,
-    color: '#fff',
-    border: 'none',
-    padding: 14,
-    borderRadius: 12,
-    fontWeight: 900,
-    cursor: 'pointer'
-  }
 }

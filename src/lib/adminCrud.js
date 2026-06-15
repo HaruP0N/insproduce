@@ -24,6 +24,11 @@ export const createAssignment = (body) => req('/api/inspecciones/asignar', { met
 export const setAssignmentStatus = (id, status) => req(`/api/assignments/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
 export const deleteAssignment = (id) => req(`/api/assignments/${id}`, { method: 'DELETE' })
 
+/* ── Inspecciones (edición admin) ── */
+export const getInspeccion = (id) => req(`/api/inspecciones/${id}`)
+export const updateInspeccion = (id, body) => req(`/api/inspecciones/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+export const updateInspeccionMetrics = (id, values) => req(`/api/inspecciones/${id}/metrics`, { method: 'PUT', body: JSON.stringify({ values }) })
+
 /* ── Commodities ── */
 export const listCommodities = () => req('/api/commodities')
 export const listCommoditiesAdmin = () => req('/api/commodities?all=1')
@@ -33,6 +38,12 @@ export const updateCommodity = (code, body) => req(`/api/commodities/${encodeURI
 /* ── Lotes ── */
 export const listLots = () => req('/api/lots')
 export const updateLot = (id, body) => req(`/api/lots/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+
+/* ── Tolerancias / estándares ── */
+export const listStandards = () => req('/api/standards')
+export const createStandard = (body) => req('/api/standards', { method: 'POST', body: JSON.stringify(body) })
+export const getStandard = (id) => req(`/api/standards/${id}`)
+export const saveDefectTolerances = (id, defect_id, bands) => req(`/api/standards/${id}/tolerances`, { method: 'PUT', body: JSON.stringify({ defect_id, bands }) })
 
 /* ── Integraciones (Google Sheets) ── */
 export const gsConfig = () => req('/api/google-sheets/config')

@@ -4,7 +4,7 @@ import { query, withTransaction, txRequest, appError, sql } from '@/lib/db/mssql
 import { isAllowedPhotoUrl } from '@/lib/security/photoUrls'
 import {
   getCommodityByCode, getActiveTemplate, getActiveStandard,
-  getDefectMap, findOrCreateProducer, findOrCreateLot, findOrCreatePallet
+  getDefectMap, findOrCreateProducer, findOrCreateLot, findOrCreatePallet, findOrCreatePackagingType
 } from '@/lib/repos/catalog'
 import { computeAndStoreResults } from '@/lib/repos/results'
 
@@ -68,9 +68,10 @@ export async function createInspection(user, body) {
 
   return withTransaction(async (tx) => {
     const producerId = await findOrCreateProducer(tx, body.producer)
+    const packagingTypeId = await findOrCreatePackagingType(tx, body.packaging_type)
     const lotId = await findOrCreateLot(tx, {
       commodityId: commodity.id, lotCode: body.lot, producerId,
-      variety: body.variety, packagingDate: body.packaging_date
+      variety: body.variety, packagingDate: body.packaging_date, packagingTypeId
     })
     const palletId = await findOrCreatePallet(tx, lotId)
 
@@ -83,16 +84,18 @@ export async function createInspection(user, body) {
       tver: template?.version ?? null,
       std: standard?.id ?? null,
       uid: user.id,
-      brix: num(body.brix_avg),
+      brix: num(body.brix_avg), brixMin: num(body.brix_min), brixMax: num(body.brix_max),
+      diaMin: num(body.diameter_min), diaMax: num(body.diameter_max),
       tw: num(body.temp_water), ta: num(body.temp_ambient), tp: num(body.temp_pulp),
       nw: num(body.net_weight) > 0 ? num(body.net_weight) : null,
       notes: body.notes ? String(body.notes) : null
     }).query(
       `INSERT INTO qc.inspections
         (pallet_id, assignment_id, commodity_id, template_id, template_version, standard_id,
-         created_by_user_id, brix_avg, temp_water, temp_ambient, temp_pulp, net_weight, notes)
+         created_by_user_id, brix_avg, brix_min, brix_max, diameter_min, diameter_max,
+         temp_water, temp_ambient, temp_pulp, net_weight, notes)
        OUTPUT INSERTED.id
-       VALUES (@pallet, @assignment, @cid, @tpl, @tver, @std, @uid, @brix, @tw, @ta, @tp, @nw, @notes)`)
+       VALUES (@pallet, @assignment, @cid, @tpl, @tver, @std, @uid, @brix, @brixMin, @brixMax, @diaMin, @diaMax, @tw, @ta, @tp, @nw, @notes)`)
     const inspectionId = ins.recordset[0].id
 
     // Mediciones (traducir JSON plano -> filas tipadas)

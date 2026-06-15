@@ -4,6 +4,7 @@ import { Sidebar, TopBar, KpiCard, Card, StatusBadge, ScoreCell } from '@/compon
 import { Donut, AreaChart } from '@/components/proto/charts'
 import { Icon } from '@/components/proto/Icon'
 import { RES, RES_VAR, fmt1, mapResolution, fechaCorta } from '@/lib/proto'
+import { useI18n } from '@/lib/i18n'
 import { getInspectionsList, getDashboard, getInspectionDetail, getMe, logout } from '@/lib/adminData'
 import UsuariosScreen from '@/components/admin/screens/Usuarios'
 import AsignacionesScreen from '@/components/admin/screens/Asignaciones'
@@ -12,20 +13,8 @@ import LotesScreen from '@/components/admin/screens/Lotes'
 import PlantillasScreen from '@/components/admin/screens/Plantillas'
 import ReportesScreen from '@/components/admin/screens/Reportes'
 import IntegracionesScreen from '@/components/admin/screens/Integraciones'
-
-const TITLES = {
-  dashboard: ['Dashboard', 'Resumen de calidad'],
-  inspecciones: ['Inspecciones', 'Historial completo de evaluaciones'],
-  nueva: ['Nueva inspección', 'Registrar una evaluación de calidad'],
-  asignaciones: ['Asignaciones', 'Carga de trabajo del equipo'],
-  lotes: ['Lotes y pallets', 'Trazabilidad en bodega'],
-  reportes: ['Reportes', 'Análisis y exportación'],
-  commodities: ['Commodities', 'Catálogo de productos'],
-  tolerancias: ['Tolerancias', 'Umbrales de defectos'],
-  plantillas: ['Plantillas', 'Formatos de inspección'],
-  usuarios: ['Usuarios', 'Cuentas y permisos'],
-  integraciones: ['Integraciones', 'Conexiones externas'],
-}
+import ToleranciasScreen from '@/components/admin/screens/Tolerancias'
+import EditarInspeccion from '@/components/admin/screens/EditarInspeccion'
 
 function DashSkeleton() {
   return (
@@ -73,9 +62,14 @@ export default function AdminApp() {
 
   const navigate = useCallback((r) => setRoute(r), [])
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3200) }
+  const reloadData = useCallback(async () => {
+    try { const [l, d] = await Promise.all([getInspectionsList(), getDashboard()]); setList(l); setDash(d) } catch {}
+  }, [])
   const pending = dash?.summary?.conditional ?? list.filter(i => i.resolucion === 'condicional').length
 
-  const [t, sub] = TITLES[route] || ['', '']
+  const { t } = useI18n()
+  const pageTitle = t('title.' + route)
+  const pageSub = t('sub.' + route)
 
   let screen
   if (loading) screen = <DashSkeleton />
@@ -89,16 +83,17 @@ export default function AdminApp() {
   else if (route === 'plantillas') screen = <PlantillasScreen onToast={showToast} />
   else if (route === 'reportes') screen = <ReportesScreen list={list} dash={dash} onToast={showToast} />
   else if (route === 'integraciones') screen = <IntegracionesScreen onToast={showToast} />
+  else if (route === 'tolerancias') screen = <ToleranciasScreen onToast={showToast} />
   else screen = <PlaceholderScreen route={route} />
 
   return (
     <div className="app">
       <Sidebar route={route === 'nueva' ? 'inspecciones' : route} onNav={navigate} pendingCount={pending} user={user} onLogout={logout} />
       <main className="main">
-        <TopBar title={t} sub={sub} theme={theme} onTheme={() => setTheme(th => th === 'dark' ? 'light' : 'dark')} onNew={() => navigate('nueva')} />
+        <TopBar title={pageTitle} sub={pageSub} theme={theme} onTheme={() => setTheme(th => th === 'dark' ? 'light' : 'dark')} onNew={() => navigate('nueva')} />
         <div className="content" key={route}>{screen}</div>
       </main>
-      {drawer && <InspectionDrawer summary={drawer} onClose={() => setDrawer(null)} onToast={showToast} />}
+      {drawer && <InspectionDrawer summary={drawer} onClose={() => setDrawer(null)} onToast={showToast} onChanged={reloadData} />}
       {toast && (
         <div className="toast-wrap"><div className="toast">
           <span className="tcheck"><Icon name="check" size={15} stroke={3} /></span>
@@ -111,6 +106,7 @@ export default function AdminApp() {
 
 /* ---------- DASHBOARD ---------- */
 function DashboardScreen({ list, dash, onOpen, onNew }) {
+  const { t } = useI18n()
   const s = dash?.summary || {}
   const total = Number(s.total) || 0
   const rejected = Number(s.rejected) || 0
@@ -129,34 +125,34 @@ function DashboardScreen({ list, dash, onOpen, onNew }) {
     { value: approved, varName: '--green' }, { value: conditional, varName: '--amber' }, { value: rejected, varName: '--red' },
   ]
   const resData = [
-    { k: 'aprobado', n: 'Aprobado', c: approved, v: '--green' },
-    { k: 'condicional', n: 'Condicional', c: conditional, v: '--amber' },
-    { k: 'rechazado', n: 'Rechazado', c: rejected, v: '--red' },
+    { k: 'aprobado', c: approved, v: '--green' },
+    { k: 'condicional', c: conditional, v: '--amber' },
+    { k: 'rechazado', c: rejected, v: '--red' },
   ]
 
   return (
     <div className="content-inner fade-up">
       <div className="grid kpi-row stagger" style={{ marginBottom: 16 }}>
-        <KpiCard icon="clipboard" label="Inspecciones" value={total} foot="acumuladas" spark={counts.length > 1 ? counts : [0, total]} sparkAccent="--accent" />
-        <KpiCard icon="sparkle" label="Score promedio" value={Number(s.avg_score) || 0} decimals={1} unit="/100" foot="sobre 100" spark={scores.length > 1 ? scores : [Number(s.avg_score) || 0, Number(s.avg_score) || 0]} sparkAccent="--green" />
-        <KpiCard icon="xCircle" label="Tasa de rechazo" value={rejectRate} suffix="%" foot={`${rejected} de ${total} lotes`} footTone={rejectRate > 0 ? 'down' : null} spark={[12, 18, 9, 21, 14, 20, 7, rejectRate]} sparkAccent="--red" />
-        <KpiCard icon="clock" label="Pend. de revisión" value={conditional} foot="condicionales" spark={[3, 2, 4, 1, 3, 2, 3, conditional]} sparkAccent="--amber" />
+        <KpiCard icon="clipboard" label={t('dash.kpi.inspecciones')} value={total} foot={t('dash.kpi.acumuladas')} spark={counts.length > 1 ? counts : [0, total]} sparkAccent="--accent" />
+        <KpiCard icon="sparkle" label={t('dash.kpi.scoreProm')} value={Number(s.avg_score) || 0} decimals={1} unit="/100" foot={t('dash.kpi.sobre100')} spark={scores.length > 1 ? scores : [Number(s.avg_score) || 0, Number(s.avg_score) || 0]} sparkAccent="--green" />
+        <KpiCard icon="xCircle" label={t('dash.kpi.tasaRechazo')} value={rejectRate} suffix="%" foot={t('dash.kpi.deLotes', { r: rejected, t: total })} footTone={rejectRate > 0 ? 'down' : null} spark={[12, 18, 9, 21, 14, 20, 7, rejectRate]} sparkAccent="--red" />
+        <KpiCard icon="clock" label={t('dash.kpi.pendRevision')} value={conditional} foot={t('dash.kpi.condicionales')} spark={[3, 2, 4, 1, 3, 2, 3, conditional]} sparkAccent="--amber" />
       </div>
 
       <div className="grid cols-2-1 stagger" style={{ marginBottom: 16 }}>
-        <Card title="Tendencia de score" sub="Promedio por semana">
+        <Card title={t('dash.tendencia')} sub={t('dash.tendenciaSub')}>
           {trend.length > 1
             ? <AreaChart data={trend} height={210} accent="--accent" />
-            : <div className="empty" style={{ padding: '60px 20px' }}>Aún no hay suficientes datos para la tendencia.</div>}
+            : <div className="empty" style={{ padding: '60px 20px' }}>{t('dash.sinTendencia')}</div>}
         </Card>
-        <Card title="Resoluciones" sub={`${total} inspecciones`}>
+        <Card title={t('dash.resoluciones')} sub={t('dash.nInspecciones', { n: total })}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginTop: 4 }}>
-            <Donut segments={donutSegs} size={138} thickness={17} centerTop={total} centerBottom="TOTAL" />
+            <Donut segments={donutSegs} size={138} thickness={17} centerTop={total} centerBottom={t('dash.total')} />
             <div className="legend" style={{ flex: 1 }}>
               {resData.map(r => (
                 <div className="legend-row" key={r.k}>
                   <span className="sw" style={{ background: `var(${r.v})` }} />
-                  <span className="lname">{r.n}</span>
+                  <span className="lname">{t('res.' + r.k)}</span>
                   <span className="lval">{r.c}</span>
                   <span className="lpct">{total ? Math.round((r.c / total) * 100) : 0}%</span>
                 </div>
@@ -167,9 +163,9 @@ function DashboardScreen({ list, dash, onOpen, onNew }) {
       </div>
 
       <div className="grid cols-1-2 stagger">
-        <Card title="Defectos causales" sub="Incidencias acumuladas">
+        <Card title={t('dash.defectosCausales')} sub={t('dash.incidencias')}>
           <div style={{ marginTop: 2 }}>
-            {defs.length === 0 && <div style={{ color: 'var(--text-faint)', fontSize: 13 }}>Sin defectos registrados.</div>}
+            {defs.length === 0 && <div style={{ color: 'var(--text-faint)', fontSize: 13 }}>{t('dash.sinDefectos')}</div>}
             {defs.map(d => (
               <div className="defect-row" key={d.label}>
                 <span className="defect-name" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -183,9 +179,9 @@ function DashboardScreen({ list, dash, onOpen, onNew }) {
           </div>
         </Card>
 
-        <Card title="Inspecciones recientes" action={<button className="btn btn-ghost btn-sm" onClick={() => onNew('inspecciones')}>Ver todas <Icon name="chevRight" size={15} /></button>}>
+        <Card title={t('dash.recientes')} action={<button className="btn btn-ghost btn-sm" onClick={() => onNew('inspecciones')}>{t('dash.verTodas')} <Icon name="chevRight" size={15} /></button>}>
           <table className="tbl">
-            <thead><tr><th>Fecha</th><th>Lote / productor</th><th className="num">Score</th><th>Resolución</th><th></th></tr></thead>
+            <thead><tr><th>{t('tbl.fecha')}</th><th>{t('tbl.loteProductor')}</th><th className="num">{t('tbl.score')}</th><th>{t('tbl.resolucion')}</th><th></th></tr></thead>
             <tbody>
               {recent.map(i => (
                 <tr key={i.id} onClick={() => onOpen(i)}>
@@ -196,7 +192,7 @@ function DashboardScreen({ list, dash, onOpen, onNew }) {
                   <td style={{ width: 30, color: 'var(--text-faint)' }}><Icon name="chevRight" size={16} /></td>
                 </tr>
               ))}
-              {recent.length === 0 && <tr><td colSpan={5}><div className="empty">Sin inspecciones todavía.</div></td></tr>}
+              {recent.length === 0 && <tr><td colSpan={5}><div className="empty">{t('dash.sinInspecciones')}</div></td></tr>}
             </tbody>
           </table>
         </Card>
@@ -212,6 +208,7 @@ const SORTS = {
   score: (a, b) => a.score - b.score,
 }
 function InspeccionesScreen({ list, onOpen }) {
+  const { t } = useI18n()
   const [filter, setFilter] = useState('todas')
   const [q, setQ] = useState('')
   const [sort, setSort] = useState({ key: 'fecha', dir: -1 })
@@ -224,13 +221,13 @@ function InspeccionesScreen({ list, onOpen }) {
 
   const rows = useMemo(() => {
     let r = list.filter(i => filter === 'todas' || i.resolucion === filter)
-    if (q.trim()) { const t = q.toLowerCase(); r = r.filter(i => (i.lote + i.productor + i.variedad + i.inspector).toLowerCase().includes(t)) }
+    if (q.trim()) { const term = q.toLowerCase(); r = r.filter(i => (i.lote + i.productor + i.variedad + i.inspector).toLowerCase().includes(term)) }
     return [...r].sort((a, b) => SORTS[sort.key](a, b) * sort.dir)
   }, [list, filter, q, sort])
 
   const toggleSort = (key) => setSort(s => s.key === key ? { key, dir: -s.dir } : { key, dir: key === 'score' ? -1 : 1 })
   const SortIcon = ({ k }) => sort.key === k ? <Icon name={sort.dir === 1 ? 'arrowUp' : 'arrowDown'} size={12} stroke={2.4} style={{ marginLeft: 4 }} /> : null
-  const chips = [{ k: 'todas', label: 'Todas' }, { k: 'aprobado', label: 'Aprobado' }, { k: 'condicional', label: 'Condicional' }, { k: 'rechazado', label: 'Rechazado' }]
+  const chips = [{ k: 'todas', label: t('common.all') }, { k: 'aprobado', label: t('res.aprobado') }, { k: 'condicional', label: t('res.condicional') }, { k: 'rechazado', label: t('res.rechazado') }]
 
   return (
     <div className="content-inner fade-up">
@@ -239,17 +236,17 @@ function InspeccionesScreen({ list, onOpen }) {
           {chips.map(c => <button key={c.k} className={filter === c.k ? 'on' : ''} onClick={() => setFilter(c.k)}>{c.label}<span className="cnt">{counts[c.k] || 0}</span></button>)}
         </div>
         <div className="search" style={{ marginLeft: 'auto' }}>
-          <Icon name="search" size={16} /><input placeholder="Filtrar inspecciones…" value={q} onChange={e => setQ(e.target.value)} />
+          <Icon name="search" size={16} /><input placeholder={t('insp.filter')} value={q} onChange={e => setQ(e.target.value)} />
         </div>
       </div>
       <Card pad={true}>
         <table className="tbl">
           <thead><tr>
-            <th className="sortable" onClick={() => toggleSort('fecha')}>Fecha <SortIcon k="fecha" /></th>
-            <th className="sortable" onClick={() => toggleSort('lote')}>Lote / productor <SortIcon k="lote" /></th>
-            <th>Variedad</th><th>Inspector</th>
-            <th className="num sortable" onClick={() => toggleSort('score')}>Score <SortIcon k="score" /></th>
-            <th>Resolución</th><th></th>
+            <th className="sortable" onClick={() => toggleSort('fecha')}>{t('tbl.fecha')} <SortIcon k="fecha" /></th>
+            <th className="sortable" onClick={() => toggleSort('lote')}>{t('tbl.loteProductor')} <SortIcon k="lote" /></th>
+            <th>{t('tbl.variedad')}</th><th>{t('tbl.inspector')}</th>
+            <th className="num sortable" onClick={() => toggleSort('score')}>{t('tbl.score')} <SortIcon k="score" /></th>
+            <th>{t('tbl.resolucion')}</th><th></th>
           </tr></thead>
           <tbody>
             {rows.map(i => (
@@ -265,23 +262,29 @@ function InspeccionesScreen({ list, onOpen }) {
             ))}
           </tbody>
         </table>
-        {rows.length === 0 && <div className="empty"><div className="ei"><Icon name="search" size={22} /></div>Sin resultados.</div>}
+        {rows.length === 0 && <div className="empty"><div className="ei"><Icon name="search" size={22} /></div>{t('insp.noResults')}</div>}
       </Card>
-      <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-faint)' }}>{rows.length} de {list.length} inspecciones</div>
+      <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-faint)' }}>{t('insp.countOf', { n: rows.length, total: list.length })}</div>
     </div>
   )
 }
 
 /* ---------- DRAWER ---------- */
-function InspectionDrawer({ summary, onClose, onToast }) {
+function InspectionDrawer({ summary, onClose, onToast, onChanged }) {
+  const { t } = useI18n()
   const [data, setData] = useState(null)
   const [err, setErr] = useState(null)
-  useEffect(() => {
-    const h = (e) => e.key === 'Escape' && onClose()
-    window.addEventListener('keydown', h)
+  const [editing, setEditing] = useState(false)
+  const loadDetail = useCallback(() => {
+    setErr(null)
     getInspectionDetail(summary.id).then(setData).catch(e => setErr(e.message))
-    return () => window.removeEventListener('keydown', h)
   }, [summary.id])
+  useEffect(() => {
+    const h = (e) => e.key === 'Escape' && !editing && onClose()
+    window.addEventListener('keydown', h)
+    loadDetail()
+    return () => window.removeEventListener('keydown', h)
+  }, [loadDetail, editing])
 
   const resolucion = data ? mapResolution(data.resolution, data.score) : summary.resolucion
   const score = data ? Number(data.score) || 0 : summary.score
@@ -309,16 +312,16 @@ function InspectionDrawer({ summary, onClose, onToast }) {
           <div className="score-hero" style={{ marginBottom: 24 }}>
             <Donut segments={ringSeg} size={104} thickness={13} centerTop={fmt1(score)} centerBottom="SCORE" />
             <div>
-              <div style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 8 }}>Resolución</div>
-              {r && <div className={'badge ' + r.color} style={{ height: 30, fontSize: 14, padding: '0 14px' }}><Icon name={r.icon} size={17} stroke={2} />{r.label}</div>}
+              <div style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 8 }}>{t('drawer.resolucion')}</div>
+              {r && <div className={'badge ' + r.color} style={{ height: 30, fontSize: 14, padding: '0 14px' }}><Icon name={r.icon} size={17} stroke={2} />{t('res.' + resolucion)}</div>}
               {data && <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 10, lineHeight: 1.5 }}>
-                Calidad {fmt1(data.quality_total_pct)}% · Condición {fmt1(data.condition_total_pct)}%<br />Total {fmt1(data.total_defects_pct)}%
+                {t('drawer.calidadCond', { q: fmt1(data.quality_total_pct), c: fmt1(data.condition_total_pct) })}<br />{t('drawer.totalPct', { v: fmt1(data.total_defects_pct) })}
               </div>}
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
-            {[['calendar', 'Fecha', summary.fecha], ['mapPin', 'Productor', summary.productor], ['grape', 'Commodity', summary.commodity], ['layers', 'Variedad', summary.variedad]].map(([ic, l, v]) => (
+            {[['calendar', t('tbl.fecha'), summary.fecha], ['mapPin', t('tbl.productor'), summary.productor], ['grape', t('tbl.commodity'), summary.commodity], ['layers', t('tbl.variedad'), summary.variedad]].map(([ic, l, v]) => (
               <div key={l} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '11px 13px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-faint)', fontSize: 11, marginBottom: 5 }}><Icon name={ic} size={13} />{l}</div>
                 <div style={{ fontSize: 13.5, fontWeight: 600 }}>{v}</div>
@@ -326,10 +329,10 @@ function InspectionDrawer({ summary, onClose, onToast }) {
             ))}
           </div>
 
-          <div className="card-title" style={{ marginBottom: 14 }}>Desglose de defectos</div>
+          <div className="card-title" style={{ marginBottom: 14 }}>{t('drawer.breakdown')}</div>
           {err && <div style={{ color: 'var(--red)', fontSize: 13 }}>{err}</div>}
           {!data && !err && <div className="skel" style={{ height: 120 }} />}
-          {data && meas.length === 0 && <div style={{ color: 'var(--text-faint)', fontSize: 13 }}>Sin defectos cuantitativos.</div>}
+          {data && meas.length === 0 && <div style={{ color: 'var(--text-faint)', fontSize: 13 }}>{t('drawer.noQuant')}</div>}
           {meas.map(m => {
             const v = m.family === 'condition' ? '--amber' : '--accent'
             const val = Number(m.value_num)
@@ -341,28 +344,43 @@ function InspectionDrawer({ summary, onClose, onToast }) {
               </div>
             )
           })}
+
+          {(data?.photos || []).length > 0 && (
+            <div style={{ marginTop: 22 }}>
+              <div className="card-title" style={{ marginBottom: 12 }}>{t('cap.photos')}</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {data.photos.map((p, i) => (
+                  <a key={i} href={p.url} target="_blank" rel="noreferrer" style={{ width: 84, height: 84 }}>
+                    <img src={p.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 9, border: '1px solid var(--border)' }} />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div className="drawer-foot">
-          <button className="btn" style={{ flex: 1 }} disabled={!summary.pdfUrl} onClick={() => summary.pdfUrl ? window.open(summary.pdfUrl, '_blank') : onToast?.({ title: 'PDF no disponible' })}>
-            <Icon name="report" size={16} />Ver reporte
+          <button className="btn" style={{ flex: 1 }} disabled={!summary.pdfUrl} onClick={() => summary.pdfUrl ? window.open(summary.pdfUrl, '_blank') : onToast?.({ title: t('drawer.pdfUnavailable') })}>
+            <Icon name="report" size={16} />{t('drawer.viewReport')}
           </button>
-          <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => onToast?.({ title: 'Edición', sub: 'Próximamente' })}><Icon name="edit" size={16} />Editar</button>
+          <button className="btn btn-primary" style={{ flex: 1 }} disabled={!data} onClick={() => setEditing(true)}><Icon name="edit" size={16} />{t('common.edit')}</button>
         </div>
       </aside>
+      {editing && data && <EditarInspeccion detail={data} onClose={() => setEditing(false)}
+        onSaved={() => { setEditing(false); loadDetail(); onChanged?.() }} onToast={onToast} />}
     </>
   )
 }
 
 /* ---------- PLACEHOLDER ---------- */
 function PlaceholderScreen({ route }) {
-  const [t, sub] = TITLES[route] || ['', '']
+  const { t } = useI18n()
   return (
     <div className="content-inner fade-up">
       <Card>
         <div className="empty">
           <div className="ei"><Icon name="sliders" size={22} /></div>
-          <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: 15 }}>{t}</div>
-          <div style={{ marginTop: 4 }}>{sub} — en construcción.</div>
+          <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: 15 }}>{t('title.' + route)}</div>
+          <div style={{ marginTop: 4 }}>{t('sub.' + route)} — {t('placeholder.underConstruction')}</div>
         </div>
       </Card>
     </div>

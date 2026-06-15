@@ -94,7 +94,21 @@ export async function findOrCreateProducer(tx, name) {
   return ins.recordset[0].id
 }
 
-export async function findOrCreateLot(tx, { commodityId, lotCode, producerId, variety, packagingDate }) {
+/** Tipo de embalaje por etiqueta (find-or-create). Devuelve id o null. */
+export async function findOrCreatePackagingType(tx, label) {
+  const l = String(label || '').trim()
+  if (!l) return null
+  const found = await txRequest(tx, { l }).query(
+    `SELECT id FROM qc.packaging_types WHERE label = @l`)
+  if (found.recordset?.length) return found.recordset[0].id
+  // code derivado de la etiqueta (A-Z0-9_), único
+  const code = l.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 50) || 'PKG'
+  const ins = await txRequest(tx, { code, l }).query(
+    `INSERT INTO qc.packaging_types (code, label) OUTPUT INSERTED.id VALUES (@code, @l)`)
+  return ins.recordset[0].id
+}
+
+export async function findOrCreateLot(tx, { commodityId, lotCode, producerId, variety, packagingDate, packagingTypeId }) {
   const code = String(lotCode || '').trim() || 'SIN-LOTE'
   const found = await txRequest(tx, { cid: commodityId, code }).query(
     `SELECT id FROM qc.lots WHERE commodity_id = @cid AND lot_code = @code`)
@@ -103,10 +117,11 @@ export async function findOrCreateLot(tx, { commodityId, lotCode, producerId, va
     cid: commodityId, code,
     pid: producerId ?? null,
     variety: variety ? String(variety).trim() : null,
-    pdate: packagingDate || null
+    pdate: packagingDate || null,
+    ptid: packagingTypeId ?? null
   }).query(
-    `INSERT INTO qc.lots (commodity_id, producer_id, lot_code, variety, packaging_date)
-     OUTPUT INSERTED.id VALUES (@cid, @pid, @code, @variety, @pdate)`)
+    `INSERT INTO qc.lots (commodity_id, producer_id, lot_code, variety, packaging_date, packaging_type_id)
+     OUTPUT INSERTED.id VALUES (@cid, @pid, @code, @variety, @pdate, @ptid)`)
   return ins.recordset[0].id
 }
 

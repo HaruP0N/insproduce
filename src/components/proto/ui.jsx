@@ -2,27 +2,29 @@
 import { Icon } from '@/components/proto/Icon'
 import { Sparkline, CountUp } from '@/components/proto/charts'
 import { RES, RES_VAR, fmt1 } from '@/lib/proto'
+import { useI18n, LangToggle } from '@/lib/i18n'
 
 export const NAV = [
   { group: null, items: [
-    { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-    { id: 'inspecciones', label: 'Inspecciones', icon: 'clipboard' },
-    { id: 'asignaciones', label: 'Asignaciones', icon: 'users' },
-    { id: 'lotes', label: 'Lotes y pallets', icon: 'boxes' },
-    { id: 'reportes', label: 'Reportes', icon: 'report' },
+    { id: 'dashboard', icon: 'dashboard' },
+    { id: 'inspecciones', icon: 'clipboard' },
+    { id: 'asignaciones', icon: 'users' },
+    { id: 'lotes', icon: 'boxes' },
+    { id: 'reportes', icon: 'report' },
   ] },
-  { group: 'Catálogo', items: [
-    { id: 'commodities', label: 'Commodities', icon: 'grape' },
-    { id: 'tolerancias', label: 'Tolerancias', icon: 'scale' },
-    { id: 'plantillas', label: 'Plantillas', icon: 'template' },
+  { group: 'catalogo', items: [
+    { id: 'commodities', icon: 'grape' },
+    { id: 'tolerancias', icon: 'scale' },
+    { id: 'plantillas', icon: 'template' },
   ] },
-  { group: 'Sistema', items: [
-    { id: 'usuarios', label: 'Usuarios', icon: 'user' },
-    { id: 'integraciones', label: 'Integraciones', icon: 'plug' },
+  { group: 'sistema', items: [
+    { id: 'usuarios', icon: 'user' },
+    { id: 'integraciones', icon: 'plug' },
   ] },
 ]
 
 export function Sidebar({ route, onNav, pendingCount, user, onLogout }) {
+  const { t } = useI18n()
   const initial = (user?.name || 'A').trim().charAt(0).toUpperCase()
   return (
     <aside className="sidebar">
@@ -36,11 +38,11 @@ export function Sidebar({ route, onNav, pendingCount, user, onLogout }) {
       <nav className="nav">
         {NAV.map((sec, si) => (
           <div key={si}>
-            {sec.group && <div className="nav-group-label">{sec.group}</div>}
+            {sec.group && <div className="nav-group-label">{t('nav.group.' + sec.group)}</div>}
             {sec.items.map(it => (
               <button key={it.id} className={'nav-item' + (route === it.id ? ' active' : '')} onClick={() => onNav(it.id)}>
                 <Icon name={it.icon} size={18} className="ico" />
-                <span>{it.label}</span>
+                <span>{t('nav.' + it.id)}</span>
                 {it.id === 'inspecciones' && pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}
               </button>
             ))}
@@ -50,13 +52,13 @@ export function Sidebar({ route, onNav, pendingCount, user, onLogout }) {
       <div className="side-foot">
         <a className="nav-item" href="/inspector" style={{ marginBottom: 6 }}>
           <Icon name="clipboardCheck" size={18} className="ico" />
-          <span>Vista inspector</span>
+          <span>{t('nav.inspectorView')}</span>
           <Icon name="chevRight" size={15} style={{ marginLeft: 'auto', color: 'var(--text-faint)' }} />
         </a>
-        <div className="user-chip" onClick={onLogout} title="Cerrar sesión">
+        <div className="user-chip" onClick={onLogout} title={t('nav.logout')}>
           <div className="avatar">{initial}</div>
           <div style={{ minWidth: 0 }}>
-            <div className="user-name">{user?.name || 'Usuario'}</div>
+            <div className="user-name">{user?.name || t('nav.user')}</div>
             <div className="user-mail">{user?.email || ''}</div>
           </div>
           <Icon name="logout" size={16} style={{ marginLeft: 'auto', color: 'var(--text-faint)' }} />
@@ -67,6 +69,7 @@ export function Sidebar({ route, onNav, pendingCount, user, onLogout }) {
 }
 
 export function TopBar({ title, sub, theme, onTheme, onNew, search, onSearch, children }) {
+  const { t } = useI18n()
   return (
     <header className="topbar">
       <div>
@@ -77,23 +80,25 @@ export function TopBar({ title, sub, theme, onTheme, onNew, search, onSearch, ch
         {children}
         <div className="search">
           <Icon name="search" size={16} />
-          <input placeholder="Buscar lote, productor…" value={search ?? ''} onChange={e => onSearch?.(e.target.value)} />
+          <input placeholder={t('topbar.search')} value={search ?? ''} onChange={e => onSearch?.(e.target.value)} />
           <span className="kbd">⌘K</span>
         </div>
-        <button className="btn btn-icon" title="Notificaciones"><Icon name="bell" size={18} /></button>
-        <button className="btn btn-icon" title="Cambiar tema" onClick={onTheme}>
+        <button className="btn btn-icon" title={t('topbar.notifications')}><Icon name="bell" size={18} /></button>
+        <button className="btn btn-icon" title={t('topbar.theme')} onClick={onTheme}>
           <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
         </button>
-        <button className="btn btn-primary" onClick={onNew}><Icon name="plus" size={17} stroke={2} />Nueva inspección</button>
+        <LangToggle title={t('topbar.language')} />
+        <button className="btn btn-primary" onClick={onNew}><Icon name="plus" size={17} stroke={2} />{t('topbar.newInspection')}</button>
       </div>
     </header>
   )
 }
 
 export function StatusBadge({ resolucion, size }) {
+  const { t } = useI18n()
   const r = RES[resolucion]
   if (!r) return null
-  return <span className={'badge ' + r.color}><Icon name={r.icon} size={size || 14} stroke={2} />{r.label}</span>
+  return <span className={'badge ' + r.color}><Icon name={r.icon} size={size || 14} stroke={2} />{t('res.' + resolucion)}</span>
 }
 
 export function ScoreCell({ score, resolucion }) {

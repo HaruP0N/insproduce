@@ -46,13 +46,16 @@ Schema changes are append-only SQL files in `db/migrations/NNNN_*.sql`, applied 
 
 ## Frontend architecture
 
-The UI is built on the client-approved **prototype design system** in `src/styles/ds.css` (OKLCH tokens, light/dark via `data-theme` on `<html>`, indigo "blueberry" accent, IBM Plex). Shared React pieces live in `src/components/proto/*` (`Icon`, `charts` = Donut/AreaChart/Sparkline/CountUp, `ui` = Sidebar/TopBar/KpiCard/Card/StatusBadge/ScoreCell). Both portals are client SPAs with internal route/tab state:
-- **Admin** — `src/components/admin/AdminApp.jsx` (mounted at `/admin`); data via `src/lib/adminData.js`.
-- **Inspector** — `src/components/inspector/InspectorApp.jsx` (mounted at `/inspector`): assigned-queue → inline capture (template-driven) → completed; data via `src/lib/inspectorData.js`. Photos upload to Cloudinary via `@/lib/cloudinary` (`PhotoField`).
+The UI is built on the client-approved **prototype design system** in `src/styles/ds.css` (OKLCH tokens, light/dark via `data-theme` on `<html>`, indigo "blueberry" accent, IBM Plex). Shared React pieces live in `src/components/proto/*` (`Icon`, `charts` = Donut/AreaChart/Sparkline/CountUp, `ui` = Sidebar/TopBar/KpiCard/Card/StatusBadge/ScoreCell). All three surfaces are client SPAs:
+- **Portal/login** — `src/components/PortalLogin.js` (mounted at `/` and `/login`): split-stage admin/ops design; real auth (`POST /api/auth/login`, role check, redirect).
+- **Admin** — `src/components/admin/AdminApp.jsx` (mounted at `/admin`); dashboard + history data via `src/lib/adminData.js`. Each menu item is a full screen under `src/components/admin/screens/*` (Usuarios/Asignaciones/Commodities/Lotes/Plantillas/Tolerancias/Reportes/Integraciones) with CRUD via `src/lib/adminCrud.js`; shared modal/confirm/field primitives in `screens/_ui.jsx`.
+- **Inspector** — `src/components/inspector/InspectorApp.jsx` (mounted at `/inspector`): assigned-queue → inline capture (template-driven) → completed; data via `src/lib/inspectorData.js`. Photos upload to Cloudinary via `@/lib/cloudinary`.
 
-The only remaining legacy UI is **`PortalLogin`** (`src/components/PortalLogin.js`, mounted at `/` and `/login`) — green-styled, not yet redesigned. The old green Tailwind kit (`src/components/ui/*`, `/ui-kit` styleguide) and the pre-prototype admin/inspector components were removed.
+The old green Tailwind kit (`src/components/ui/*`, `/ui-kit`) and pre-prototype admin/inspector components were removed.
 
-Both data layers (`adminData.js`, `inspectorData.js`) fetch the qc API and map rows to the prototype's shape; `src/lib/proto.js` holds UI constants and the resolution mapping (`mapResolution` translates DB English → Spanish UI labels `aprobado/condicional/rechazado`). The frontend still posts the **legacy payload shape** (metrics keyed `"family.code"`); the backend translates that to the qc model, so the UI didn't need rewriting to switch databases.
+**i18n**: `src/lib/i18n.jsx` (`I18nProvider` in `layout.js`, `useI18n()` → `t(key, vars)`, `LangToggle`) + `src/lib/i18nDict.js` (flat keys, `{ es, en }`; ES = neutral Spanish, EN = US English). Default language auto-detects from the browser, persists to `localStorage['insp-lang']`; toggle in every top bar. **All UI strings go through `t()`** — when adding UI, add keys to the dict, don't hardcode. Resolution labels are translated in `StatusBadge` via `t('res.'+resolucion)`.
+
+Data layers (`adminData.js`, `adminCrud.js`, `inspectorData.js`) fetch the qc API and map rows to the prototype's shape; `src/lib/proto.js` holds UI constants and the resolution mapping (`mapResolution` translates DB English → internal keys `aprobado/condicional/rechazado`, which `t()` then localizes). The frontend still posts the **legacy payload shape** (metrics keyed `"family.code"`); the backend translates that to the qc model.
 
 Theme is set pre-paint by an inline script in `src/app/layout.js` (reads `localStorage['insp-theme']`, default light) and toggled client-side.
 
