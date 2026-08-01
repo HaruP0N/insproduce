@@ -15,6 +15,7 @@ import ReportesScreen from '@/components/admin/screens/Reportes'
 import IntegracionesScreen from '@/components/admin/screens/Integraciones'
 import ToleranciasScreen from '@/components/admin/screens/Tolerancias'
 import EditarInspeccion from '@/components/admin/screens/EditarInspeccion'
+import NuevaInspeccionScreen from '@/components/admin/screens/NuevaInspeccion'
 
 function DashSkeleton() {
   return (
@@ -84,6 +85,7 @@ export default function AdminApp() {
   else if (route === 'reportes') screen = <ReportesScreen list={list} dash={dash} onToast={showToast} />
   else if (route === 'integraciones') screen = <IntegracionesScreen onToast={showToast} />
   else if (route === 'tolerancias') screen = <ToleranciasScreen onToast={showToast} />
+  else if (route === 'nueva') screen = <NuevaInspeccionScreen onToast={showToast} onCancel={() => navigate('inspecciones')} onDone={() => { reloadData(); navigate('inspecciones') }} />
   else screen = <PlaceholderScreen route={route} />
 
   return (

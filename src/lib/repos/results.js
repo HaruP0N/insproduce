@@ -16,7 +16,10 @@ export async function computeAndStoreResults(tx, inspectionId) {
   let tol = []
   if (standardId != null) {
     const t = await txRequest(tx, { s: standardId }).query(
-      `SELECT defect_id, band, min_pct, max_pct FROM qc.defect_tolerances WHERE standard_id = @s`)
+      `SELECT dt.defect_id, d.code AS defect_code, dt.band, dt.min_pct, dt.max_pct
+       FROM qc.defect_tolerances dt
+       JOIN qc.defects d ON d.id = dt.defect_id
+       WHERE dt.standard_id = @s`)
     tol = t.recordset
   }
   const bandFor = (defectId, v) => {
@@ -42,6 +45,20 @@ export async function computeAndStoreResults(tx, inspectionId) {
   const total = Math.round((quality + condition) * 100) / 100
   quality = Math.round(quality * 100) / 100
   condition = Math.round(condition * 100) / 100
+
+  // Las SUMAS por familia también se bandan (pseudo-defectos sum_quality /
+  // sum_condition / sum_total, migración 0008): en los reportes reales el causal
+  // más común es la suma de condición, no un defecto individual.
+  for (const [code, v] of [['sum_quality', quality], ['sum_condition', condition], ['sum_total', total]]) {
+    const first = tol.find(b => b.defect_code === code)
+    if (!first) continue
+    const band = bandFor(first.defect_id, v)
+    if (band == null) continue
+    if (worst == null || band > worst || (band === worst && v > causalVal)) {
+      worst = band; causal = first.defect_id; causalVal = v
+    }
+  }
+
   const resolution = worst == null ? null : (worst <= 2 ? 'approved' : worst === 3 ? 'conditional' : 'rejected')
   const score = Math.max(0, Math.round((100 - total) * 100) / 100)
 
