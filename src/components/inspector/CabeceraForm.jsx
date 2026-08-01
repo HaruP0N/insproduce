@@ -45,6 +45,16 @@ const GRUPOS_NUMERICOS = [
       ['diameter_min', 'Mínimo'],
       ['diameter_max', 'Máximo'],
     ]
+  },
+  {
+    key:   'baxlo',
+    label: 'Baxlo — firmeza Shore (protocolo: mín / moda / máx)',
+    foto:  true,
+    campos: [
+      ['baxlo_min',  'Mínimo'],
+      ['baxlo_mode', 'Moda'],
+      ['baxlo_max',  'Máximo'],
+    ]
   }
 ]
 

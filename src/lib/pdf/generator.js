@@ -253,11 +253,23 @@ export async function generateInspectionPDF(report) {
     font('bold', 9); text(C.text); doc.text(String(it[1]), x + 4, ty + 7.6)
   })
   py += Math.ceil(hm.length / 2) * 11 + 6
-  if (insp.notes) {
-    if (py > 235) { doc.addPage(); pageHeader(doc, 'Notes', fill, text, font); py = 40 }
+  const autoLines = buildAutoNotes(r, insp)
+  if (insp.notes || autoLines.length) {
+    if (py > 220) { doc.addPage(); pageHeader(doc, 'Notes', fill, text, font); py = 40 }
     font('bold', 11); text(C.text); doc.text('Notes', M, py); py += 5
-    font('normal', 9); text(C.muted)
-    doc.text(doc.splitTextToSize(String(insp.notes), CW), M, py)
+    if (insp.notes) {
+      font('normal', 9); text(C.muted)
+      const manual = doc.splitTextToSize(String(insp.notes), CW)
+      doc.text(manual, M, py); py += manual.length * 4.2 + 3
+    }
+    if (autoLines.length) {
+      font('bold', 8); text(C.hint); doc.text('AUTO SUMMARY', M, py); py += 4.5
+      font('normal', 9); text(C.muted)
+      for (const line of autoLines) {
+        const wrapped = doc.splitTextToSize('· ' + line, CW)
+        doc.text(wrapped, M, py); py += wrapped.length * 4.2 + 1
+      }
+    }
   }
   // ═══════════════ PÁGINA 3 — PHOTO EVIDENCE ═══════════════
   const photoEntries = Object.entries(r.photos || {}).filter(([, u]) => u?.length)
@@ -276,8 +288,11 @@ export async function generateInspectionPDF(report) {
           else placeholder(doc, x, ph, imgW, imgH, fill, stroke, text, font)
         } catch { placeholder(doc, x, ph, imgW, imgH, fill, stroke, text, font) }
         font('normal', 7); text(C.muted)
-        const label = key.startsWith('header.') ? cap(key.replace('header.', '')) + ' (header)' : cap(key)
-        doc.text(label.slice(0, 26), x, ph + imgH + 4)
+        // Caption con trazabilidad: defecto · lote · variedad (para disputas con el recibidor)
+        const what = key.startsWith('header.') ? cap(key.replace('header.', '')) + ' (header)' : cap(key)
+        const trace = [insp.lot, insp.variety].filter(Boolean).join(' · ')
+        const label = trace ? `${what} · ${trace}` : what
+        doc.text(label.slice(0, 40), x, ph + imgH + 4)
         col++
         if (col >= cols) { col = 0; ph += imgH + 9; px = M }
       }
@@ -303,6 +318,31 @@ function footer(doc, insp, fill, stroke, text, font) {
     doc.text(`Inspector: ${insp.inspector_name || 'N/A'}  ·  Generated ${new Date().toLocaleDateString('en-US')}`, M, FOOTER_Y)
     doc.text(`Page ${i} of ${n}`, PAGE_W - M, FOOTER_Y, { align: 'right' })
   }
+}
+
+// Notas automáticas según la guía "Notas Repote.pdf" (QC Inspec):
+// score 100% Excellent/Good → frase fija sin defectos; Fair/Poor/Bad → frase
+// nombrando los defectos que causaron la nota. + temperatura de pulpa y Baxlo.
+const BAND_WORDS = { 1: 'Excellent', 2: 'Good', 3: 'Fair', 4: 'Poor', 5: 'Bad' }
+function buildAutoNotes(r, insp) {
+  const lines = []
+  const banded = (r.defects || []).filter(d => d.band != null)
+  const worst = banded.length ? Math.max(...banded.map(d => d.band)) : null
+  if (worst != null) {
+    const word = BAND_WORDS[worst] || '—'
+    if (worst <= 2) {
+      lines.push(`${word} quality and condition.`)
+    } else {
+      const causals = banded.filter(d => d.band >= 3)
+        .sort((a, b) => b.band - a.band)
+        .map(d => (d.label || d.key).replace(/\s*\(.*\)$/, ''))
+      lines.push(`${word} quality and condition with presence of ${causals.join(', ')}.`)
+    }
+  }
+  if (insp.temp_pulp != null) lines.push(`Pulp temperature at inspection: ${insp.temp_pulp}°.`)
+  if (insp.firmness_min != null || insp.firmness_max != null || insp.firmness_mode != null)
+    lines.push(`Baxlo (min / mode / max): ${insp.firmness_min ?? '—'} / ${insp.firmness_mode ?? '—'} / ${insp.firmness_max ?? '—'}.`)
+  return lines
 }
 
 function placeholder(doc, x, y, w, h, fill, stroke, text, font) {

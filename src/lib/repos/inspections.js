@@ -60,7 +60,15 @@ export async function createInspection(user, body) {
   if (!commodity.active) throw appError(400, `Commodity ${commodityCode} inactivo`)
 
   const template = await getActiveTemplate(commodity.id)
-  const standard = await getActiveStandard(commodity.id)
+  let standard = await getActiveStandard(commodity.id)
+  // Estándar explícito (selector del admin): debe pertenecer al commodity y estar activo
+  if (body.standard_id != null) {
+    const s = await query(
+      `SELECT id, name FROM qc.quality_standards WHERE id=@s AND commodity_id=@cid AND active=1`,
+      { s: Number(body.standard_id), cid: commodity.id })
+    if (!s.recordset?.length) throw appError(400, 'standard_id inválido para este commodity')
+    standard = s.recordset[0]
+  }
   const metrics = (body.metrics && typeof body.metrics === 'object') ? body.metrics : {}
   const photos = (body.photos && typeof body.photos === 'object') ? body.photos : {}
   const unknownKeys = []
@@ -85,17 +93,20 @@ export async function createInspection(user, body) {
       std: standard?.id ?? null,
       uid: user.id,
       brix: num(body.brix_avg), brixMin: num(body.brix_min), brixMax: num(body.brix_max),
+      brixMode: num(body.brix_mode),
       diaMin: num(body.diameter_min), diaMax: num(body.diameter_max),
       tw: num(body.temp_water), ta: num(body.temp_ambient), tp: num(body.temp_pulp),
       nw: num(body.net_weight) > 0 ? num(body.net_weight) : null,
+      fMin: num(body.baxlo_min), fMode: num(body.baxlo_mode), fMax: num(body.baxlo_max),
       notes: body.notes ? String(body.notes) : null
     }).query(
       `INSERT INTO qc.inspections
         (pallet_id, assignment_id, commodity_id, template_id, template_version, standard_id,
-         created_by_user_id, brix_avg, brix_min, brix_max, diameter_min, diameter_max,
-         temp_water, temp_ambient, temp_pulp, net_weight, notes)
+         created_by_user_id, brix_avg, brix_min, brix_max, brix_mode, diameter_min, diameter_max,
+         temp_water, temp_ambient, temp_pulp, net_weight,
+         firmness_min, firmness_mode, firmness_max, notes)
        OUTPUT INSERTED.id
-       VALUES (@pallet, @assignment, @cid, @tpl, @tver, @std, @uid, @brix, @brixMin, @brixMax, @diaMin, @diaMax, @tw, @ta, @tp, @nw, @notes)`)
+       VALUES (@pallet, @assignment, @cid, @tpl, @tver, @std, @uid, @brix, @brixMin, @brixMax, @brixMode, @diaMin, @diaMax, @tw, @ta, @tp, @nw, @fMin, @fMode, @fMax, @notes)`)
     const inspectionId = ins.recordset[0].id
 
     // Mediciones (traducir JSON plano -> filas tipadas)
@@ -162,6 +173,7 @@ export async function getInspectionDetail(id, user) {
   const head = await query(
     `SELECT i.id, i.created_at, i.updated_at, i.commodity_id, i.created_by_user_id,
             i.brix_avg, i.brix_min, i.brix_max, i.brix_mode, i.diameter_min, i.diameter_max,
+            i.firmness_min, i.firmness_mode, i.firmness_max,
             i.temp_water, i.temp_ambient, i.temp_pulp, i.net_weight, i.notes,
             c.code AS commodity_code, c.name AS commodity_name,
             l.lot_code AS lot, l.variety, pr.name AS producer,

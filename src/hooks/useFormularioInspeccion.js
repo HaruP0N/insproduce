@@ -7,7 +7,9 @@ import { getToken } from '@/lib/auth/clientToken'
 const EMPTY_HEADER = {
   producer: '', lot: '', variety: '', caliber: '',
   packaging_code: '', packaging_type: '', packaging_date: '',
-  net_weight: '', brix_avg: '', temp_water: '', temp_ambient: '', temp_pulp: '', notes: ''
+  net_weight: '', brix_avg: '', brix_min: '', brix_max: '', brix_moda: '',
+  diameter_min: '', diameter_max: '', baxlo_min: '', baxlo_mode: '', baxlo_max: '',
+  temp_water: '', temp_ambient: '', temp_pulp: '', notes: ''
 }
 
 const EMPTY_HEADER_PHOTOS = {
@@ -185,6 +187,14 @@ export default function useFormularioInspeccion() {
         packaging_date: header.packaging_date || null,
         net_weight:     header.net_weight  === '' ? null : Number(header.net_weight),
         brix_avg:       header.brix_avg    === '' ? null : Number(header.brix_avg),
+        brix_min:       header.brix_min    === '' ? null : Number(header.brix_min),
+        brix_max:       header.brix_max    === '' ? null : Number(header.brix_max),
+        brix_mode:      header.brix_moda   === '' ? null : Number(header.brix_moda),
+        diameter_min:   header.diameter_min === '' ? null : Number(header.diameter_min),
+        diameter_max:   header.diameter_max === '' ? null : Number(header.diameter_max),
+        baxlo_min:      header.baxlo_min   === '' ? null : Number(header.baxlo_min),
+        baxlo_mode:     header.baxlo_mode  === '' ? null : Number(header.baxlo_mode),
+        baxlo_max:      header.baxlo_max   === '' ? null : Number(header.baxlo_max),
         temp_water:     header.temp_water  === '' ? null : Number(header.temp_water),
         temp_ambient:   header.temp_ambient === '' ? null : Number(header.temp_ambient),
         temp_pulp:      header.temp_pulp   === '' ? null : Number(header.temp_pulp),

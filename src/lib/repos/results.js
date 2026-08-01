@@ -32,10 +32,14 @@ export async function computeAndStoreResults(tx, inspectionId) {
 
   let quality = 0, condition = 0, worst = null, causal = null, causalVal = -1
   for (const r of rows) {
-    if (r.unit !== '%' || r.value_num == null) continue
+    if (r.value_num == null) continue
     const v = Number(r.value_num)
-    if (r.family === 'quality') quality += v
-    else if (r.family === 'condition') condition += v
+    // Solo los % componen las sumas por familia; las incidencias (unit 'count',
+    // p.ej. decay/mold incidence) no suman pero SÍ se bandan si tienen tolerancia.
+    if (r.unit === '%') {
+      if (r.family === 'quality') quality += v
+      else if (r.family === 'condition') condition += v
+    }
     const band = bandFor(r.defect_id, v)
     if (band == null) continue
     if (worst == null || band > worst || (band === worst && v > causalVal)) {

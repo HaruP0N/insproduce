@@ -9,7 +9,8 @@ import { useI18n } from '@/lib/i18n'
 const EMPTY_HEADER = {
   producer: '', lot: '', variety: '', caliber: '',
   packaging_code: '', packaging_type: '', packaging_date: '',
-  net_weight: '', brix_avg: '', temp_water: '', temp_ambient: '', temp_pulp: '', notes: '',
+  net_weight: '', brix_avg: '', baxlo_min: '', baxlo_mode: '', baxlo_max: '',
+  temp_water: '', temp_ambient: '', temp_pulp: '', notes: '',
 }
 
 function groupFields(fields) {
@@ -31,6 +32,8 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel }) {
   const { t } = useI18n()
   const [commodities, setCommodities] = useState([])
   const [code, setCode] = useState('')
+  const [standards, setStandards] = useState([])
+  const [standardId, setStandardId] = useState('')
   const [fields, setFields] = useState([])
   const [tplErr, setTplErr] = useState(null)
   const [header, setHeader] = useState(EMPTY_HEADER)
@@ -49,6 +52,10 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel }) {
         setCode(c => c || list[0]?.code || '')
       })
       .catch(() => alive && onToast({ title: t('ni.errCommodities'), bad: true }))
+    fetch('/api/standards', { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => { if (alive) setStandards(Array.isArray(d) ? d : []) })
+      .catch(() => {})
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -56,7 +63,7 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel }) {
   useEffect(() => {
     if (!code) return
     let alive = true
-    setFields([]); setValues({}); setPhotos({}); setTplErr(null)
+    setFields([]); setValues({}); setPhotos({}); setTplErr(null); setStandardId('')
     fetch(`/api/metric-templates/code/${code}`, { credentials: 'include' })
       .then(r => r.json().then(d => ({ ok: r.ok, d })))
       .then(({ ok, d }) => {
@@ -96,10 +103,14 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel }) {
         temp_water: num(header.temp_water),
         temp_ambient: num(header.temp_ambient),
         temp_pulp: num(header.temp_pulp),
+        baxlo_min: num(header.baxlo_min),
+        baxlo_mode: num(header.baxlo_mode),
+        baxlo_max: num(header.baxlo_max),
         notes: header.notes || null,
         metrics: values,
         photos,
         assignment_id: null,
+        standard_id: standardId ? Number(standardId) : null,
       }
       const res = await fetch('/api/inspecciones', {
         method: 'POST', credentials: 'include',
@@ -136,6 +147,14 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel }) {
                 {commodities.map(c => <option key={c.code} value={c.code}>{c.es_name || c.name || c.code}</option>)}
               </select>
             </Field>
+            <Field label={t('ni.standard')} help={t('ni.standardHelp')}>
+              <select className="select" value={standardId} onChange={e => setStandardId(e.target.value)}>
+                <option value="">{t('ni.standardDefault')}</option>
+                {standards.filter(s => s.commodity_code === code && s.active).map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </Field>
             <Field label={t('tbl.productor')} required>
               <input className="input" value={header.producer} onChange={setH('producer')} placeholder={t('asg.producerPh')} />
             </Field>
@@ -162,6 +181,9 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel }) {
             {numberField('temp_water', 'ni.tempWater')}
             {numberField('temp_ambient', 'ni.tempAmbient')}
             {numberField('temp_pulp', 'ni.tempPulp')}
+            {numberField('baxlo_min', 'ni.baxloMin')}
+            {numberField('baxlo_mode', 'ni.baxloMode')}
+            {numberField('baxlo_max', 'ni.baxloMax')}
           </div>
           <Field label={t('ni.notes')}>
             <textarea className="input" rows={3} value={header.notes} onChange={setH('notes')} />
