@@ -1,70 +1,27 @@
 @import "tailwindcss";
 
-/* Paleta tipo "dashboard antiguo" */
-:root {
-  --background: #f4f7f4;   /* fondo suave verdoso/gris */
-  --foreground: #111827;   /* texto oscuro (gris carbón) */
+/* ===== Tokens del sistema de diseño (enterprise verde "agri") ===== */
+@theme {
+  --font-sans: var(--font-ibm-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-ibm-mono), ui-monospace, "SF Mono", monospace;
 
-  --card: #ffffff;
-  --muted: #6b7280;
-  --border: #e5e7eb;
+  /* superficies */
+  --color-canvas: #f6f8f6;   /* fondo de página */
+  --color-surface: #ffffff;  /* cards/paneles */
+  --color-line: #e7eae7;     /* bordes sutiles */
+  --color-line-strong: #d6dad6;
 
-  --brand: #2e7d32;        /* verde Insproduce */
-  --brand-2: #ffb300;      /* amarillo acento */
+  /* marca (verde) */
+  --color-brand-50:  #f0fdf4;
+  --color-brand-100: #dcfce7;
+  --color-brand-200: #bbf7d0;
+  --color-brand-300: #86efac;
+  --color-brand-400: #4ade80;
+  --color-brand-500: #22c55e;
+  --color-brand-600: #16a34a;
+  --color-brand-700: #15803d;
+  --color-brand-800: #166534;
+  --color-brand-900: #14532d;
 }
 
-body {
-  margin: 0;
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-/* 🔧 FORZAR INPUTS SIEMPRE CLAROS */
-input, select, textarea {
-  font-family: inherit;
-  background-color: #ffffff !important;
-  color: #111827 !important;
-  border: 1px solid #d1d5db;
-  color-scheme: light;
-}
-
-input::placeholder {
-  color: #9ca3af !important;
-}
-
-button {
-  font-family: inherit;
-}
-
-/* Forzar modo claro siempre */
-* {
-  color-scheme: light;
-}
-
-/* Desactivar modo oscuro automático */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #f4f7f4;
-    --foreground: #111827;
-    --card: #ffffff;
-    --muted: #6b7280;
-    --border: #e5e7eb;
-  }
-
-  body {
-    background: var(--background);
-    color: var(--foreground);
-  }
-
-  input, select, textarea {
-    background-color: #ffffff !important;
-    color: #111827 !important;
-    border: 1px solid #d1d5db;
-  }
-}
+/* Estilos base globales los provee src/styles/ds.css (design system del prototipo). */

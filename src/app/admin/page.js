@@ -1,5 +1,5 @@
-import PanelAdmin from '@/components/admin/PanelAdmin'
+import AdminApp from '@/components/admin/AdminApp'
 
 export default function AdminPage() {
-  return <PanelAdmin />
+  return <AdminApp />
 }

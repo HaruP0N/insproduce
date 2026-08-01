@@ -1,53 +1,21 @@
-import { NextResponse } from 'next/server'
-import { query } from '@/lib/db/mssql'
-import { verifyTokenFromCookies } from '@/lib/auth/verifyToken'
+// src/app/api/inspecciones/[id]/metrics/route.js
+import { requireAuth } from '@/lib/auth/requireAuth'
+import { ok, fail, serverError } from '@/lib/http'
+import { replaceMeasurements } from '@/lib/repos/inspections'
 
 export async function PUT(req, context) {
-  const v = verifyTokenFromCookies(req)
-  if (!v.ok) return NextResponse.json({ msg: v.msg }, { status: v.status })
-
+  const auth = requireAuth(req)
+  if (auth.response) return auth.response
   try {
-    const params = await context.params
-    const id = Number(params?.id)
-    
-    if (!Number.isInteger(id) || id <= 0) {
-      return NextResponse.json({ msg: 'ID inválido' }, { status: 400 })
-    }
-
+    const { id } = await context.params
+    const nid = Number(id)
+    if (!Number.isInteger(nid) || nid <= 0) return fail(400, 'ID inválido')
     const body = await req.json().catch(() => ({}))
-    const { template_id, template_version, values } = body
-
-    if (!values || typeof values !== 'object') {
-      return NextResponse.json({ msg: 'values requerido' }, { status: 400 })
-    }
-
-    const metricsObj = {
-      template_id: template_id ?? null,
-      template_version: template_version ?? null,
-      values
-    }
-
-    const metricsJson = JSON.stringify(metricsObj)
-
-    // Actualizar métricas
-    await query(
-      `UPDATE inspections 
-       SET metrics = @metrics, updated_at = GETDATE()
-       WHERE id = @id`,
-      { id, metrics: metricsJson }
-    )
-
-    // Invalidar PDF (está en tabla separada inspection_pdfs)
-    await query(
-      `UPDATE inspection_pdfs 
-       SET status = 'PENDING', pdf_url = NULL, pdf_hash = NULL, updated_at = GETDATE()
-       WHERE inspection_id = @id`,
-      { id }
-    )
-
-    return NextResponse.json({ ok: true, id })
+    if (!body.values || typeof body.values !== 'object') return fail(400, 'values requerido')
+    const { unknownKeys } = await replaceMeasurements(nid, body.values, auth.user)
+    return ok({ ok: true, id: nid, warnings: { unknownKeys } })
   } catch (e) {
-    console.error('[PUT /inspecciones/[id]/metrics]', e)
-    return NextResponse.json({ msg: 'Error al actualizar métricas' }, { status: 500 })
+    if (e.status) return fail(e.status, e.message)
+    return serverError('PUT inspecciones/:id/metrics', e)
   }
 }

@@ -1,19 +1,15 @@
-import { NextResponse } from 'next/server'
-import { query } from '@/lib/db/mssql'
-import { verifyTokenFromCookies } from '@/lib/auth/verifyToken'
+// src/app/api/users/inspectores/route.js
+import { requireAuth } from '@/lib/auth/requireAuth'
+import { ok, fail, serverError } from '@/lib/http'
+import { listInspectors } from '@/lib/repos/users'
 
 export async function GET(req) {
-  const v = verifyTokenFromCookies(req)
-  if (!v.ok) return NextResponse.json({ msg: v.msg }, { status: v.status })
-  if (v.user.role !== 'admin') {
-    return NextResponse.json({ msg: 'Solo admin' }, { status: 403 })
-  }
-
+  const auth = requireAuth(req, { role: 'admin' })
+  if (auth.response) return auth.response
   try {
-    const r = await query(`SELECT id, email, role, active FROM users ORDER BY id`)
-    return NextResponse.json(r.recordset || [])
+    return ok(await listInspectors())
   } catch (e) {
-    console.error('[GET /api/users]', e)
-    return NextResponse.json({ msg: 'Error al obtener usuarios' }, { status: 500 })
+    if (e.status) return fail(e.status, e.message)
+    return serverError('users/inspectores', e)
   }
 }

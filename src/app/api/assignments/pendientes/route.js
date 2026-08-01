@@ -1,27 +1,14 @@
-// src/app/api/assignments/pendientes/route.js
-import { NextResponse } from 'next/server'
-import { verifyTokenFromCookies } from '@/lib/auth/verifyToken'
-import { query } from '@/lib/db/mssql'
+import { requireAuth } from '@/lib/auth/requireAuth'
+import { ok, fail, serverError } from '@/lib/http'
+import { listPendientes } from '@/lib/repos/assignments'
 
 export async function GET(req) {
-  const v = verifyTokenFromCookies(req)
-  if (!v.ok || !v.user) return NextResponse.json({ msg: 'No autenticado' }, { status: 401 })
-  if (v.user.role !== 'admin') return NextResponse.json({ msg: 'Solo admin' }, { status: 403 })
-
+  const auth = requireAuth(req, { role: 'admin' })
+  if (auth.response) return auth.response
   try {
-    const result = await query(
-      `SELECT
-        a.id, a.created_at, a.producer, a.lot, a.variety, a.commodity_code,
-        a.status, a.notes_admin,
-        u.id as inspector_id, u.name as inspector_name, u.email as inspector_email
-       FROM assignments a
-       INNER JOIN users u ON a.user_id = u.id
-       WHERE a.status = 'pendiente'
-       ORDER BY a.created_at DESC`
-    )
-    return NextResponse.json({ asignaciones: result.recordset || [] })
+    return ok({ asignaciones: await listPendientes() })
   } catch (e) {
-    console.error('[pendientes]', e)
-    return NextResponse.json({ msg: 'Error: ' + e.message }, { status: 500 })
+    if (e.status) return fail(e.status, e.message)
+    return serverError('assignments/pendientes', e)
   }
 }

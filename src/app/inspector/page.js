@@ -1,5 +1,5 @@
-import DashboardInspector from '@/components/inspector/DashboardInspector'
+import InspectorApp from '@/components/inspector/InspectorApp'
 
 export default function InspectorPage() {
-  return <DashboardInspector />
+  return <InspectorApp />
 }

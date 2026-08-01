@@ -1,29 +1,30 @@
-import { NextResponse } from 'next/server'
-import { query } from '@/lib/db/mssql'
-// 🔧 CAMBIAR A COOKIES
-import { verifyTokenFromCookies } from '@/lib/auth/verifyToken'
+import { requireAuth } from '@/lib/auth/requireAuth'
+import { ok, fail, serverError } from '@/lib/http'
+import { listCommodities, listCommoditiesAdmin, createCommodity } from '@/lib/repos/catalog'
 
 export async function GET(req) {
-  // 🔧 SIN AWAIT
-  const v = verifyTokenFromCookies(req)
-  if (!v.ok) {
-    return NextResponse.json({ msg: v.msg }, { status: v.status })
-  }
-
+  const auth = requireAuth(req)
+  if (auth.response) return auth.response
   try {
-    const r = await query(
-      `SELECT id, code, name
-       FROM commodities
-       WHERE active = 1 AND code <> 'CHERRY'
-       ORDER BY name ASC`
-    )
-
-    return NextResponse.json(r.recordset)
+    const all = new URL(req.url).searchParams.get('all')
+    if (all && auth.user.role === 'admin') return ok(await listCommoditiesAdmin())
+    return ok(await listCommodities())
   } catch (e) {
-    console.error('[commodities]', e)
-    return NextResponse.json(
-      { msg: 'Error al cargar commodities' },
-      { status: 500 }
-    )
+    if (e.status) return fail(e.status, e.message)
+    return serverError('commodities', e)
+  }
+}
+
+export async function POST(req) {
+  const auth = requireAuth(req, { role: 'admin' })
+  if (auth.response) return auth.response
+  try {
+    const body = await req.json().catch(() => null)
+    if (!body) return fail(400, 'Body JSON inválido')
+    const id = await createCommodity(body)
+    return ok({ ok: true, id })
+  } catch (e) {
+    if (e.status) return fail(e.status, e.message)
+    return serverError('commodities POST', e)
   }
 }

@@ -1,349 +1,322 @@
-// src/lib/pdf/generator.js
+// Generador de PDF "estilo Power BI" (inglés). Gráficos vectoriales dibujados en jsPDF.
+// Página 1: resumen ejecutivo visual. Páginas 2-3: detalle de datos. Última: fotos.
 import { jsPDF } from 'jspdf'
 import fetch from 'node-fetch'
+import { isAllowedPhotoUrl } from '@/lib/security/photoUrls'
 
-export async function generateInspectionPDF(inspection, photos = {}) {
-  try {
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
+const PAGE_W = 216, PAGE_H = 279, M = 14, CW = PAGE_W - M * 2, FOOTER_Y = 270
 
-    const margin      = 20
-    const pageWidth   = 216
-    const pageHeight  = 279
-    const contentWidth = pageWidth - margin * 2
-    const footerY     = 272
-    const safeBottom  = footerY - 8   // zona segura antes del footer
+const C = {
+  brand: '#15803d', accent: '#16a34a',
+  text: '#18181b', muted: '#6b7280', hint: '#9ca3af',
+  line: '#e5e7eb', track: '#eef0ee', surface: '#ffffff', white: '#ffffff', panel: '#f6f8f6',
+  quality: '#16a34a', condition: '#0ea5e9',
+}
+const BAND = { 1: '#16a34a', 2: '#65a30d', 3: '#f59e0b', 4: '#ea580c', 5: '#dc2626' }
+const RES = {
+  approved: { label: 'APPROVED', hex: '#16a34a' },
+  conditional: { label: 'CONDITIONAL', hex: '#f59e0b' },
+  rejected: { label: 'REJECTED', hex: '#dc2626' },
+}
 
-    let yPos = 20
+const rgb = (hex) => {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [0, 0, 0]
+}
+const fmt = (v, d = 1, suffix = '') => (v == null || Number.isNaN(Number(v))) ? '—' : Number(v).toFixed(d) + suffix
+const cap = (s) => String(s || '').replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
-    // ── helpers de página ──────────────────────────────────
-    const checkPage = (needed = 20) => {
-      if (yPos + needed > safeBottom) {
-        doc.addPage()
-        yPos = 20
-      }
+export async function generateInspectionPDF(report) {
+  // compat: si llega el objeto viejo {inspection, photos}, lo normalizamos
+  const r = report?.results ? report : { inspection: report?.inspection || report, results: {}, defects: [], bandCounts: [0,0,0,0,0], sizeDist: [], colorDist: [], trend: [], photos: report?.photos || {} }
+  const insp = r.inspection
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
+
+  const fill = (h) => doc.setFillColor(...rgb(h))
+  const stroke = (h) => doc.setDrawColor(...rgb(h))
+  const text = (h) => doc.setTextColor(...rgb(h))
+  const font = (style = 'normal', size) => { doc.setFont('helvetica', style); if (size) doc.setFontSize(size) }
+
+  const arc = (doc, cx, cy, rad, a0, a1, lw, hex, capStyle = 'butt') => {
+    stroke(hex); doc.setLineWidth(lw); doc.setLineCap(capStyle)
+    const steps = Math.max(2, Math.ceil(Math.abs(a1 - a0) / 4))
+    let prev = null
+    for (let i = 0; i <= steps; i++) {
+      const a = (a0 + (a1 - a0) * i / steps) * Math.PI / 180
+      const x = cx + rad * Math.cos(a), y = cy + rad * Math.sin(a)
+      if (prev) doc.line(prev.x, prev.y, x, y)
+      prev = { x, y }
     }
+    doc.setLineCap('butt')
+  }
+  const panel = (x, y, w, h, title) => {
+    fill(C.surface); stroke(C.line); doc.setLineWidth(0.3)
+    doc.roundedRect(x, y, w, h, 2.2, 2.2, 'FD')
+    if (title) { font('bold', 9); text(C.text); doc.text(title, x + 5, y + 7) }
+  }
+  const chip = (x, y, label, hex) => {
+    const w = doc.getTextWidth(label) + 6
+    fill(hex); doc.roundedRect(x, y - 3.4, w, 5, 1.2, 1.2, 'F')
+    font('bold', 7.5); text(C.white); doc.text(label, x + 3, y)
+    return w
+  }
+  const hbar = (x, y, w, value, max, hex, label, valueLabel) => {
+    font('normal', 8); text(C.muted); doc.text(label, x, y)
+    const bx = x + 42, bw = w - 42 - 14
+    fill(C.track); doc.roundedRect(bx, y - 2.6, bw, 3.2, 1.6, 1.6, 'F')
+    const frac = max > 0 ? Math.min(1, value / max) : 0
+    if (frac > 0) { fill(hex); doc.roundedRect(bx, y - 2.6, Math.max(1.6, bw * frac), 3.2, 1.6, 1.6, 'F') }
+    font('bold', 8); text(C.text); doc.text(valueLabel, x + w, y, { align: 'right' })
+  }
 
-    // ═══════════════════════════════════════════════════════
-    // HEADER
-    // ═══════════════════════════════════════════════════════
-    doc.setFontSize(24)
-    doc.setTextColor(22, 163, 74)
-    doc.text('INSPRODUCE', margin, yPos)
+  // ═══════════════ PÁGINA 1 — EXECUTIVE SUMMARY ═══════════════
+  fill(C.brand); doc.rect(0, 0, PAGE_W, 30, 'F')
+  fill('#1c8a47'); doc.roundedRect(M, 8, 14, 14, 3, 3, 'F')
+  text('#ffffff'); font('bold', 9); doc.text('QC', M + 7, 16.5, { align: 'center' })
+  font('bold', 16); doc.text('Inspection Quality Report', M + 19, 14)
+  font('normal', 9); text('#d7f0df')
+  doc.text(`${insp.commodity_name || insp.commodity_code || ''}  ·  Lot ${insp.lot || '—'}  ·  ${insp.standard_name || 'No standard'}`, M + 19, 21)
 
-    doc.setFontSize(10)
-    doc.setTextColor(107, 114, 128)
-    doc.text(`Fecha: ${new Date(inspection.created_at).toLocaleDateString('es-CL')}`, pageWidth - margin, yPos, { align: 'right' })
+  const res = RES[r.results.resolution] || { label: '—', hex: '#6b7280' }
+  font('normal', 8); text('#d7f0df')
+  doc.text(`Report #${insp.id}  ·  ${new Date(insp.created_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}`, PAGE_W - M, 12, { align: 'right' })
+  const pillW = doc.getTextWidth(res.label) + 14
+  fill('#ffffff'); doc.roundedRect(PAGE_W - M - pillW, 16, pillW, 8, 2, 2, 'F')
+  font('bold', 10); text(res.hex); doc.text(res.label, PAGE_W - M - pillW / 2, 21.4, { align: 'center' })
 
-    yPos += 10
-    doc.setFontSize(18)
-    doc.setTextColor(17, 24, 39)
-    doc.text('REPORTE DE INSPECCIÓN', margin, yPos)
+  // meta strip
+  let y = 38
+  const meta = [
+    ['Producer', insp.producer], ['Variety', insp.variety], ['Inspector', insp.inspector_name],
+    ['Commodity', insp.commodity_name], ['Standard', insp.standard_name],
+  ]
+  const cellW = CW / meta.length
+  meta.forEach((mm, i) => {
+    const x = M + i * cellW
+    font('normal', 7.5); text(C.hint); doc.text(String(mm[0]).toUpperCase(), x, y)
+    font('bold', 9); text(C.text)
+    doc.text(doc.splitTextToSize(mm[1] || '—', cellW - 4), x, y + 5)
+  })
+  stroke(C.line); doc.setLineWidth(0.3); doc.line(M, y + 9, PAGE_W - M, y + 9)
 
-    yPos += 7
-    doc.setFontSize(10)
-    doc.setTextColor(107, 114, 128)
-    doc.text(`ID: #${inspection.id}`, margin, yPos)
+  // score gauge panel + KPI grid
+  y = 52
+  const gaugeW = 60, gaugeH = 62
+  panel(M, y, gaugeW, gaugeH)
+  const cx = M + gaugeW / 2, cy = y + 26, gr = 18
+  arc(doc, cx, cy, gr, 0, 360, 4.5, C.track)
+  const score = r.results.score
+  if (score != null) arc(doc, cx, cy, gr, -90, -90 + 360 * Math.max(0, Math.min(100, score)) / 100, 4.5, res.hex, 'round')
+  font('bold', 19); text(C.text); doc.text(fmt(score, 1), cx, cy + 1, { align: 'center' })
+  font('normal', 7); text(C.hint); doc.text('SCORE / 100', cx, cy + 6.5, { align: 'center' })
+  font('normal', 7.5); text(C.hint); doc.text('Causal defect', cx, y + 50, { align: 'center' })
+  font('bold', 8.5); text(C.text)
+  doc.text(doc.splitTextToSize(r.results.causal || 'None', gaugeW - 8), cx, y + 55, { align: 'center' })
 
-    yPos += 5
-    doc.setDrawColor(229, 231, 235)
-    doc.setLineWidth(0.5)
-    doc.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 10
+  const kx = M + gaugeW + 6, kw = CW - gaugeW - 6
+  const kpis = [
+    ['Total defects', fmt(r.results.total_defects_pct, 1, '%')],
+    ['Quality', fmt(r.results.quality_total_pct, 1, '%')],
+    ['Condition', fmt(r.results.condition_total_pct, 1, '%')],
+    ['Brix avg', fmt(insp.brix_avg, 1, '°')],
+    ['Firmness', insp.firmness_mode != null ? fmt(insp.firmness_mode, 0, ' Sh') : '—'],
+    ['Pulp temp', fmt(insp.temp_pulp, 1, '°C')],
+  ]
+  const tileW = (kw - 2 * 5) / 3, tileH = (gaugeH - 5) / 2
+  kpis.forEach((k, i) => {
+    const tx = kx + (i % 3) * (tileW + 5), ty = y + Math.floor(i / 3) * (tileH + 5)
+    fill(C.panel); doc.roundedRect(tx, ty, tileW, tileH, 2, 2, 'F')
+    font('normal', 7.5); text(C.muted); doc.text(k[0], tx + 4, ty + 7)
+    font('bold', 14); text(C.text); doc.text(k[1], tx + 4, ty + 18)
+  })
 
-    // ═══════════════════════════════════════════════════════
-    // INFORMACIÓN GENERAL
-    // ═══════════════════════════════════════════════════════
-    checkPage(30)
-    yPos = drawSectionHeader(doc, 'INFORMACIÓN GENERAL', yPos, margin, pageWidth, '#16a34a')
-    yPos += 5
-
-    const generalInfo = [
-      ['Productor', inspection.producer],
-      ['Lote',      inspection.lot],
-      ['Commodity', `${inspection.commodity_code || ''} ${inspection.commodity_name ? '(' + inspection.commodity_name + ')' : ''}`],
-      ['Variedad',  inspection.variety]
-    ].filter(([, v]) => v)
-
-    yPos = drawKeyValueGrid(doc, generalInfo, yPos, margin, contentWidth, 2)
-    yPos += 8
-
-    // ═══════════════════════════════════════════════════════
-    // EMBALAJE Y TEMPERATURA
-    // ═══════════════════════════════════════════════════════
-    checkPage(30)
-    yPos = drawSectionHeader(doc, 'EMBALAJE Y TEMPERATURA', yPos, margin, pageWidth, '#16a34a')
-    yPos += 5
-
-    const packagingInfo = [
-      ['Código embalaje', inspection.packaging_code],
-      ['Tipo embalaje',   inspection.packaging_type],
-      ['Fecha embalaje',  inspection.packaging_date ? formatDate(inspection.packaging_date) : null],
-      ['Peso neto',       inspection.net_weight    ? `${inspection.net_weight} kg`    : null],
-      ['Brix promedio',   inspection.brix_avg      ? `${inspection.brix_avg}°`        : null],
-      ['Brix mín / máx',  (inspection.brix_min != null || inspection.brix_max != null) ? `${inspection.brix_min ?? '--'} / ${inspection.brix_max ?? '--'}` : null],
-      ['Brix moda',       inspection.brix_moda     ? `${inspection.brix_moda}°`       : null],
-      ['Temp. agua',      inspection.temp_water    ? `${inspection.temp_water}°C`     : null],
-      ['Temp. ambiente',  inspection.temp_ambient  ? `${inspection.temp_ambient}°C`   : null],
-      ['Temp. pulpa',     inspection.temp_pulp     ? `${inspection.temp_pulp}°C`      : null],
-      ['Diámetro mín',    inspection.diameter_min  ? `${inspection.diameter_min} mm`  : null],
-      ['Diámetro máx',    inspection.diameter_max  ? `${inspection.diameter_max} mm`  : null],
-    ].filter(([, v]) => v)
-
-    yPos = drawKeyValueGrid(doc, packagingInfo, yPos, margin, contentWidth, 2)
-    yPos += 8
-
-    // ═══════════════════════════════════════════════════════
-    // MÉTRICAS
-    // ═══════════════════════════════════════════════════════
-    let metrics = inspection.metrics
-    try { if (typeof metrics === 'string') metrics = JSON.parse(metrics) } catch { metrics = { values: {} } }
-    const metricsValues = metrics?.values || {}
-
-    const groupedMetrics = {}
-    Object.entries(metricsValues).forEach(([key, value]) => {
-      const prefix = key.split('.')[0] || 'other'
-      if (!groupedMetrics[prefix]) groupedMetrics[prefix] = []
-      groupedMetrics[prefix].push([key, value])
+  // donut (band distribution) + quality vs condition
+  y += gaugeH + 6
+  const half = (CW - 6) / 2
+  panel(M, y, half, 46, 'Defects by band')
+  const total = r.bandCounts.reduce((a, b) => a + b, 0)
+  const dcx = M + 22, dcy = y + 27, dr = 13
+  if (total > 0) {
+    let a = -90
+    r.bandCounts.forEach((cnt, i) => {
+      if (!cnt) return
+      const span = 360 * cnt / total
+      arc(doc, dcx, dcy, dr, a, a + span, 5, BAND[i + 1]); a += span
     })
+  } else { arc(doc, dcx, dcy, dr, 0, 360, 5, C.track) }
+  font('bold', 12); text(C.text); doc.text(String(total), dcx, dcy + 1, { align: 'center' })
+  font('normal', 6.5); text(C.hint); doc.text('defects', dcx, dcy + 5, { align: 'center' })
+  const bandNames = ['Excellent', 'Good', 'Fair', 'Poor', 'Bad']
+  let ly = y + 14
+  bandNames.forEach((bn, i) => {
+    const lx = M + 42
+    fill(BAND[i + 1]); doc.roundedRect(lx, ly - 2.4, 2.8, 2.8, 0.6, 0.6, 'F')
+    font('normal', 8); text(C.muted); doc.text(bn, lx + 5, ly)
+    font('bold', 8); text(C.text); doc.text(String(r.bandCounts[i]), M + half - 5, ly, { align: 'right' })
+    ly += 6.2
+  })
 
-    const groupConfigs = {
-      quality:   { label: 'MÉTRICAS DE CALIDAD', color: '#16a34a' },
-      condition: { label: 'CONDICIÓN',            color: '#2563eb' },
-      pack:      { label: 'EMBALAJE',             color: '#7c3aed' }
-    }
+  panel(M + half + 6, y, half, 46, 'Quality vs. condition')
+  const qx = M + half + 11, qw = half - 10
+  const q = Number(r.results.quality_total_pct || 0), cnd = Number(r.results.condition_total_pct || 0), tt = q + cnd
+  const sby = y + 18
+  fill(C.track); doc.roundedRect(qx, sby, qw, 6, 1.5, 1.5, 'F')
+  if (tt > 0) {
+    const qwid = qw * q / tt
+    fill(C.quality); doc.roundedRect(qx, sby, Math.max(1, qwid), 6, 1.5, 1.5, 'F')
+    fill(C.condition); doc.rect(qx + qwid, sby, qw - qwid, 6, 'F')
+  }
+  fill(C.quality); doc.roundedRect(qx, sby + 14, 2.8, 2.8, 0.6, 0.6, 'F')
+  font('normal', 8); text(C.muted); doc.text(`Quality  ${fmt(q, 1, '%')}`, qx + 5, sby + 16.4)
+  fill(C.condition); doc.roundedRect(qx, sby + 22, 2.8, 2.8, 0.6, 0.6, 'F')
+  font('normal', 8); text(C.muted); doc.text(`Condition  ${fmt(cnd, 1, '%')}`, qx + 5, sby + 24.4)
 
-    for (const [groupKey, entries] of Object.entries(groupedMetrics)) {
-      if (!entries.length) continue
-      const config = groupConfigs[groupKey] || { label: 'OTROS', color: '#6b7280' }
+  // top defects
+  y += 52
+  const topDefs = r.defects.filter(d => d.unit === '%' && d.value != null).sort((a, b) => b.value - a.value).slice(0, 6)
+  const tdH = 16 + topDefs.length * 7 + 4
+  panel(M, y, CW, Math.max(28, tdH), 'Top defects (% of sample)')
+  const maxv = Math.max(0.01, ...topDefs.map(d => d.value))
+  let dy = y + 16
+  if (!topDefs.length) { font('normal', 8.5); text(C.hint); doc.text('No quantitative defects recorded.', M + 6, dy) }
+  topDefs.forEach(d => {
+    hbar(M + 6, dy, CW - 12, d.value, maxv, BAND[d.band] || C.accent, cap(d.label).slice(0, 22), fmt(d.value, d.value < 10 ? 2 : 1) + '%')
+    dy += 7
+  })
 
-      // Estimar altura necesaria: header (10) + filas (ceil(n/2) * 10) + margen (16)
-      const needed = 10 + Math.ceil(entries.length / 2) * 10 + 16
-      checkPage(needed)
+  // optional: score trend sparkline
+  if (r.trend && r.trend.length > 1) {
+    y += Math.max(28, tdH) + 6
+    panel(M, y, CW, 26, `Score trend (last ${r.trend.length} ${insp.commodity_name || ''} inspections)`)
+    const sx = M + 6, sw = CW - 12, syb = y + 21, sht = 8
+    const mn = Math.min(...r.trend), mx = Math.max(...r.trend), rng = Math.max(1, mx - mn)
+    stroke(C.accent); doc.setLineWidth(0.8); doc.setLineCap('round')
+    let prev = null
+    r.trend.forEach((v, i) => {
+      const px = sx + sw * (r.trend.length === 1 ? 0.5 : i / (r.trend.length - 1))
+      const py = syb - ((v - mn) / rng) * sht
+      if (prev) doc.line(prev.x, prev.y, px, py)
+      fill(C.accent); doc.circle(px, py, 0.8, 'F'); prev = { x: px, y: py }
+    })
+  }
 
-      yPos = drawSectionHeader(doc, config.label, yPos, margin, pageWidth, config.color)
-      yPos += 5
+  // ═══════════════ PÁGINA 2 — MEASUREMENT DETAIL ═══════════════
+  doc.addPage()
+  pageHeader(doc, 'Measurement detail', fill, text, font)
+  let py = 40
+  const drawDefectTable = (title, fam) => {
+    const rows = r.defects.filter(d => d.family === fam)
+    if (!rows.length) return
+    font('bold', 11); text(C.text); doc.text(title, M, py); py += 5
+    const cols = [M + 2, M + 96, M + 120, M + 150]
+    fill(C.panel); doc.rect(M, py, CW, 8, 'F')
+    font('bold', 7.5); text(C.muted)
+    doc.text('DEFECT', cols[0], py + 5.4); doc.text('VALUE', cols[1], py + 5.4)
+    doc.text('BAND', cols[2], py + 5.4); doc.text('TOLERANCE', cols[3], py + 5.4)
+    py += 8
+    rows.forEach((d, i) => {
+      if (py > 250) { doc.addPage(); pageHeader(doc, 'Measurement detail (cont.)', fill, text, font); py = 40 }
+      if (i % 2) { fill('#fbfcfb'); doc.rect(M, py, CW, 8, 'F') }
+      font('normal', 8.5); text(C.text); doc.text(cap(d.label).slice(0, 46), cols[0], py + 5.4)
+      const val = d.value != null ? fmt(d.value, d.value < 10 ? 2 : 1) + (d.unit === '%' ? '%' : '') : (d.option || d.text || '—')
+      font('bold', 8.5); doc.text(String(val), cols[1], py + 5.4)
+      if (d.band_label) chip(cols[2], py + 5.4, d.band_label, BAND[d.band])
+      else { font('normal', 8); text(C.hint); doc.text('—', cols[2], py + 5.4) }
+      font('normal', 8); text(C.muted)
+      const trange = d.tol_min != null
+        ? (d.tol_max == null
+            ? `${fmt(d.tol_min, d.tol_min % 1 ? 2 : 0)}%+`
+            : `${fmt(d.tol_min, d.tol_min % 1 ? 2 : 0)}-${fmt(d.tol_max, d.tol_max % 1 ? 2 : 0)}%`)
+        : '—'
+      doc.text(trange, cols[3], py + 5.4)
+      py += 8
+    })
+    py += 7
+  }
+  drawDefectTable('Quality defects', 'quality')
+  drawDefectTable('Condition defects', 'condition')
 
-      const metricItems = entries.map(([key, value]) => {
-        const label = key.split('.').pop().replace(/_/g, ' ')
-        return [capitalize(label), value || '--']
-      })
-
-      yPos = drawKeyValueGrid(doc, metricItems, yPos, margin, contentWidth, 2)
-      yPos += 8
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // OBSERVACIONES
-    // ═══════════════════════════════════════════════════════
-    if (inspection.notes) {
-      const splitText = doc.splitTextToSize(inspection.notes, contentWidth)
-      checkPage(20 + splitText.length * 5)
-
-      yPos = drawSectionHeader(doc, 'OBSERVACIONES', yPos, margin, pageWidth, '#16a34a')
-      yPos += 5
-
-      doc.setFontSize(10)
-      doc.setTextColor(55, 65, 81)
-      doc.text(splitText, margin, yPos)
-      yPos += splitText.length * 5 + 8
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // FOTOS — nueva página propia, 3 columnas con título debajo
-    // ═══════════════════════════════════════════════════════
-    const headerPhotoEntries  = Object.entries(photos).filter(([k, urls]) =>  k.startsWith('header.') && urls?.length > 0)
-    const metricPhotoEntries  = Object.entries(photos).filter(([k, urls]) => !k.startsWith('header.') && urls?.length > 0)
-    const allPhotoEntries     = [...headerPhotoEntries, ...metricPhotoEntries]
-
-    if (allPhotoEntries.length > 0) {
-      doc.addPage()
-      yPos = 20
-
-      const cols    = 3
-      const imgW    = (contentWidth - (cols - 1) * 4) / cols
-      const imgH    = imgW * 0.75
-      const labelH  = 8
-      const cellH   = imgH + labelH + 4
-      const colGap  = 4
-
-      const renderPhotoGroup = async (entries, sectionTitle, color) => {
-        if (!entries.length) return
-        if (yPos + 20 > safeBottom) { doc.addPage(); yPos = 20 }
-        yPos = drawSectionHeader(doc, sectionTitle, yPos, margin, pageWidth, color)
-        yPos += 6
-
-        let col = 0
-        let rowStartY = yPos
-
-        for (const [metricKey, urls] of entries) {
-          for (const url of urls) {
-            if (rowStartY + cellH > safeBottom) {
-              doc.addPage()
-              rowStartY = 20
-              col = 0
-            }
-
-            const xPos = margin + col * (imgW + colGap)
-            const yImg = rowStartY
-
-            try {
-              const imageData = await downloadImageAsBase64(url)
-              if (imageData) {
-                doc.addImage(imageData, 'JPEG', xPos, yImg, imgW, imgH, undefined, 'FAST')
-              } else {
-                drawPlaceholder(doc, xPos, yImg, imgW, imgH)
-              }
-            } catch {
-              drawPlaceholder(doc, xPos, yImg, imgW, imgH)
-            }
-
-            // Label traducido
-            const labelMap = {
-              'header.brix':         'Brix',
-              'header.temperatura':  'Temperatura',
-              'header.packaging_code': 'Código Embalaje',
-              'header.packaging_type': 'Tipo Embalaje',
-              'header.packaging_date': 'Fecha Embalaje',
-              'header.net_weight':     'Peso Neto',
-            }
-            const rawLabel = labelMap[metricKey] || metricKey
-              .replace('header.', '')
-              .replace(/^(quality|condition|pack)\./, '')
-              .replace(/\./g, ' - ')
-              .replace(/_/g, ' ')
-            const label = capitalize(rawLabel)
-
-            doc.setFontSize(7.5)
-            doc.setTextColor(75, 85, 99)
-            doc.setFont(undefined, 'bold')
-            const maxChars = Math.floor(imgW / 1.8)
-            const shortLabel = label.length > maxChars ? label.slice(0, maxChars - 1) + '…' : label
-            doc.text(shortLabel, xPos + imgW / 2, yImg + imgH + 5, { align: 'center' })
-            doc.setFont(undefined, 'normal')
-
-            col++
-            if (col >= cols) {
-              col = 0
-              rowStartY += cellH + 4
-            }
-          }
-        }
-
-        yPos = col > 0 ? rowStartY + cellH + 8 : rowStartY + 8
+  if (py > 215) { doc.addPage(); pageHeader(doc, 'Measurement detail (cont.)', fill, text, font); py = 40 }
+  font('bold', 11); text(C.text); doc.text('Header measurements', M, py); py += 6
+  const hm = [
+    ['Brix (min / avg / max)', `${fmt(insp.brix_min)} / ${fmt(insp.brix_avg)} / ${fmt(insp.brix_max)}`],
+    ['Brix mode', fmt(insp.brix_mode)],
+    ['Firmness (min / mode / max)', `${fmt(insp.firmness_min)} / ${fmt(insp.firmness_mode)} / ${fmt(insp.firmness_max)}`],
+    ['Diameter (min / max) mm', `${fmt(insp.diameter_min)} / ${fmt(insp.diameter_max)}`],
+    ['Pulp / ambient / water °C', `${fmt(insp.temp_pulp)} / ${fmt(insp.temp_ambient)} / ${fmt(insp.temp_water)}`],
+    ['Net weight', fmt(insp.net_weight, 2)],
+  ]
+  hm.forEach((it, i) => {
+    const x = M + (i % 2) * (CW / 2), ty = py + Math.floor(i / 2) * 11
+    fill(C.panel); doc.roundedRect(x, ty, CW / 2 - 4, 9, 1.5, 1.5, 'F')
+    font('normal', 7.5); text(C.muted); doc.text(it[0], x + 4, ty + 3.8)
+    font('bold', 9); text(C.text); doc.text(String(it[1]), x + 4, ty + 7.6)
+  })
+  py += Math.ceil(hm.length / 2) * 11 + 6
+  if (insp.notes) {
+    if (py > 235) { doc.addPage(); pageHeader(doc, 'Notes', fill, text, font); py = 40 }
+    font('bold', 11); text(C.text); doc.text('Notes', M, py); py += 5
+    font('normal', 9); text(C.muted)
+    doc.text(doc.splitTextToSize(String(insp.notes), CW), M, py)
+  }
+  // ═══════════════ PÁGINA 3 — PHOTO EVIDENCE ═══════════════
+  const photoEntries = Object.entries(r.photos || {}).filter(([, u]) => u?.length)
+  if (photoEntries.length) {
+    doc.addPage()
+    pageHeader(doc, 'Photo evidence', fill, text, font)
+    const cols = 3, gap = 4, imgW = (CW - (cols - 1) * gap) / cols, imgH = imgW * 0.78
+    let px = M, ph = 42, col = 0
+    for (const [key, urls] of photoEntries) {
+      for (const url of urls) {
+        if (ph + imgH + 8 > 262) { doc.addPage(); pageHeader(doc, 'Photo evidence (cont.)', fill, text, font); ph = 42; col = 0; px = M }
+        const x = M + col * (imgW + gap)
+        try {
+          const data = await downloadImageAsBase64(url)
+          if (data) doc.addImage(data, 'JPEG', x, ph, imgW, imgH, undefined, 'FAST')
+          else placeholder(doc, x, ph, imgW, imgH, fill, stroke, text, font)
+        } catch { placeholder(doc, x, ph, imgW, imgH, fill, stroke, text, font) }
+        font('normal', 7); text(C.muted)
+        const label = key.startsWith('header.') ? cap(key.replace('header.', '')) + ' (header)' : cap(key)
+        doc.text(label.slice(0, 26), x, ph + imgH + 4)
+        col++
+        if (col >= cols) { col = 0; ph += imgH + 9; px = M }
       }
-
-      await renderPhotoGroup(headerPhotoEntries, 'EVIDENCIA DE MEDICIÓN', '#16a34a')
-      await renderPhotoGroup(metricPhotoEntries, 'EVIDENCIA DE DEFECTOS', '#2563eb')
     }
+  }
 
-    // ═══════════════════════════════════════════════════════
-    // FOOTER en todas las páginas
-    // ═══════════════════════════════════════════════════════
-    const pageCount = doc.internal.getNumberOfPages()
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i)
-      doc.setFontSize(9)
-      doc.setTextColor(156, 163, 175)
-      doc.text(
-        `Inspector: ${inspection.inspector_name || 'N/A'} • Fecha de reporte: ${new Date().toLocaleDateString('es-CL')} • Página ${i} de ${pageCount}`,
-        pageWidth / 2, footerY, { align: 'center' }
-      )
-    }
+  footer(doc, insp, fill, stroke, text, font)
+  return Buffer.from(doc.output('arraybuffer'))
+}
 
-    return Buffer.from(doc.output('arraybuffer'))
+function pageHeader(doc, title, fill, text, font) {
+  fill('#15803d'); doc.rect(0, 0, PAGE_W, 14, 'F')
+  text('#ffffff'); font('bold', 12); doc.text(title, M, 9.5)
+  font('normal', 8); text('#d7f0df'); doc.text('Insproduce QC', PAGE_W - M, 9.5, { align: 'right' })
+}
 
-  } catch (error) {
-    console.error('[generateInspectionPDF] Error:', error)
-    throw error
+function footer(doc, insp, fill, stroke, text, font) {
+  const n = doc.internal.getNumberOfPages()
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i)
+    stroke('#e5e7eb'); doc.setLineWidth(0.3); doc.line(M, FOOTER_Y - 3, PAGE_W - M, FOOTER_Y - 3)
+    font('normal', 8); text('#9ca3af')
+    doc.text(`Inspector: ${insp.inspector_name || 'N/A'}  ·  Generated ${new Date().toLocaleDateString('en-US')}`, M, FOOTER_Y)
+    doc.text(`Page ${i} of ${n}`, PAGE_W - M, FOOTER_Y, { align: 'right' })
   }
 }
 
-// ═══════════════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════════════
-
-function drawSectionHeader(doc, title, yPos, margin, pageWidth, color) {
-  const rgb = hexToRgb(color)
-  doc.setFontSize(13)
-  doc.setTextColor(rgb.r, rgb.g, rgb.b)
-  doc.setFont(undefined, 'bold')
-  doc.text(title, margin, yPos)
-  doc.setFont(undefined, 'normal')
-  yPos += 2
-  doc.setDrawColor(rgb.r, rgb.g, rgb.b)
-  doc.setLineWidth(0.7)
-  doc.line(margin, yPos, pageWidth - margin, yPos)
-  return yPos + 5
-}
-
-function drawKeyValueGrid(doc, items, startY, margin, contentWidth, columns = 2) {
-  const columnWidth = contentWidth / columns
-  const rowHeight   = 10
-  let yPos = startY
-
-  for (let i = 0; i < items.length; i += columns) {
-    for (let j = 0; j < columns && (i + j) < items.length; j++) {
-      const [key, value] = items[i + j]
-      const xPos = margin + j * columnWidth
-
-      doc.setFontSize(9)
-      doc.setTextColor(107, 114, 128)
-      doc.setFont(undefined, 'bold')
-      doc.text(key + ':', xPos, yPos)
-
-      doc.setFontSize(10)
-      doc.setTextColor(17, 24, 39)
-      doc.setFont(undefined, 'normal')
-      const valueText = doc.splitTextToSize(String(value || '--'), columnWidth - 5)
-      doc.text(valueText, xPos, yPos + 4)
-    }
-    yPos += rowHeight
-  }
-  return yPos
-}
-
-function drawPlaceholder(doc, x, y, w, h) {
-  doc.setDrawColor(229, 231, 235)
-  doc.setLineWidth(0.3)
-  doc.rect(x, y, w, h)
-  doc.setFontSize(8)
-  doc.setTextColor(156, 163, 175)
-  doc.text('Imagen no disponible', x + w / 2, y + h / 2, { align: 'center' })
-}
-
-function formatDate(val) {
-  // mssql puede devolver un objeto Date o un string ISO
-  let iso
-  if (val instanceof Date) {
-    // Usar componentes UTC para evitar offset de zona horaria
-    const y = val.getUTCFullYear()
-    const m = String(val.getUTCMonth() + 1).padStart(2, '0')
-    const d = String(val.getUTCDate()).padStart(2, '0')
-    iso = `${y}-${m}-${d}`
-  } else {
-    iso = String(val).slice(0, 10)
-  }
-  const [year, month, day] = iso.split('-')
-  return `${day}-${month}-${year}`
-}
-
-function capitalize(str) {
-  return str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
-}
-
-function hexToRgb(hex) {
-  const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  return r ? { r: parseInt(r[1], 16), g: parseInt(r[2], 16), b: parseInt(r[3], 16) } : { r: 0, g: 0, b: 0 }
+function placeholder(doc, x, y, w, h, fill, stroke, text, font) {
+  fill('#f6f8f6'); stroke('#e5e7eb'); doc.setLineWidth(0.3); doc.roundedRect(x, y, w, h, 1.5, 1.5, 'FD')
+  font('normal', 7.5); text('#9ca3af'); doc.text('Image unavailable', x + w / 2, y + h / 2, { align: 'center' })
 }
 
 async function downloadImageAsBase64(url) {
+  if (!isAllowedPhotoUrl(url)) return null
   try {
     const response = await fetch(url, { timeout: 15000 })
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    const buffer      = Buffer.from(await response.arrayBuffer())
+    const buffer = Buffer.from(await response.arrayBuffer())
     const contentType = response.headers.get('content-type') || 'image/jpeg'
     return `data:${contentType};base64,${buffer.toString('base64')}`
-  } catch {
-    return null
-  }
+  } catch { return null }
 }

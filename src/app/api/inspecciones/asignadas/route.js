@@ -1,38 +1,26 @@
 // src/app/api/inspecciones/asignadas/route.js
-import { NextResponse } from 'next/server'
-import { verifyTokenFromCookies } from '@/lib/auth/verifyToken'
+import { requireAuth } from '@/lib/auth/requireAuth'
+import { ok, fail, serverError } from '@/lib/http'
 import { query } from '@/lib/db/mssql'
 
 export async function GET(req) {
-  const v = verifyTokenFromCookies(req)
-  if (!v.ok || !v.user) return NextResponse.json({ msg: 'No autenticado' }, { status: 401 })
-
+  const auth = requireAuth(req)
+  if (auth.response) return auth.response
   try {
-    const result = await query(
-      `SELECT id, created_at, producer, lot, variety, commodity_code,
-              status, user_id, notes_admin
-       FROM assignments
-       WHERE user_id = @userId AND status = 'pendiente'
-       ORDER BY created_at DESC`,
-      { userId: v.user.id }
-    )
-
-    const inspecciones = result.recordset?.map(row => ({
-      id:             row.id,
-      created_at:     row.created_at,
-      producer:       row.producer,
-      lot:            row.lot,
-      variety:        row.variety,
-      commodity_code: row.commodity_code,
-      status:         row.status,
-      notes_admin:    row.notes_admin,
-      caliber:        null,
-      packaging_type: null
-    })) || []
-
-    return NextResponse.json({ inspecciones })
+    const r = await query(
+      `SELECT a.id, a.created_at, a.producer, a.lot, a.variety,
+              c.code AS commodity_code, a.status, a.instructions AS notes_admin
+       FROM qc.assignments a
+       LEFT JOIN qc.commodities c ON c.id = a.commodity_id
+       WHERE a.user_id = @uid AND a.status = 'pendiente' AND a.deleted_at IS NULL
+       ORDER BY a.created_at DESC`,
+      { uid: auth.user.id })
+    const inspecciones = (r.recordset || []).map(row => ({
+      ...row, caliber: null, packaging_type: null
+    }))
+    return ok({ inspecciones })
   } catch (e) {
-    console.error('[asignadas]', e)
-    return NextResponse.json({ msg: 'Error al cargar: ' + e.message }, { status: 500 })
+    if (e.status) return fail(e.status, e.message)
+    return serverError('asignadas', e)
   }
 }

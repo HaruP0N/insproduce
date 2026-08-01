@@ -1,4 +1,10 @@
 /** @type {import('next').NextConfig} */
+// En dev, Next/React Refresh (HMR) requiere 'unsafe-eval'. En producción se omite.
+const isDev = process.env.NODE_ENV !== "production";
+const scriptSrc = isDev
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:;"
+  : "script-src 'self' 'unsafe-inline' https:;";
+
 const nextConfig = {
   poweredByHeader: false,
 
@@ -31,7 +37,7 @@ const nextConfig = {
             key: "Content-Security-Policy",
             value: `
               default-src 'self';
-              script-src 'self' 'unsafe-inline' 'unsafe-eval' https:;
+              ${scriptSrc}
               style-src 'self' 'unsafe-inline' https:;
               img-src 'self' data: blob: https:;
               font-src 'self' data: https:;

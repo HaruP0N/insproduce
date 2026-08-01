@@ -1,133 +1,78 @@
 // src/app/api/inspecciones/[id]/route.js
-import { NextResponse } from 'next/server'
-import { verifyTokenFromCookies } from '@/lib/auth/verifyToken'
-import { query } from '@/lib/db/mssql'
+import { requireAuth, authorizeOwnership } from '@/lib/auth/requireAuth'
+import { ok, fail, serverError } from '@/lib/http'
+import { withTransaction, txRequest, query, appError } from '@/lib/db/mssql'
+import { getInspectionDetail } from '@/lib/repos/inspections'
+import { computeAndStoreResults } from '@/lib/repos/results'
 
-function safeJson(v) {
-  if (!v) return {}
-  try { return typeof v === 'string' ? JSON.parse(v) : v }
-  catch { return {} }
-}
+const num = (v) => (v === '' || v == null) ? null : (Number.isFinite(Number(v)) ? Number(v) : null)
 
-// GET — Detalle completo de una inspección
+// GET — detalle (admin o dueño)
 export async function GET(req, context) {
-  const v = verifyTokenFromCookies(req)
-  if (!v.ok || !v.user) return NextResponse.json({ msg: 'No autenticado' }, { status: 401 })
-
+  const auth = requireAuth(req)
+  if (auth.response) return auth.response
   try {
     const { id } = await context.params
-
-    const result = await query(
-      `SELECT
-        i.id, i.created_at, i.updated_at,
-        i.producer, i.lot, i.variety, i.caliber,
-        i.packaging_code, i.packaging_type, i.packaging_date,
-        i.net_weight,
-        i.brix_avg, i.brix_min, i.brix_max, i.brix_moda,
-        i.temp_water, i.temp_ambient, i.temp_pulp,
-        i.diameter_min, i.diameter_max,
-        i.notes, i.metrics,
-        i.header_photos,
-        c.code  AS commodity_code,
-        c.name  AS commodity_name,
-        p.pdf_url
-       FROM inspections i
-       LEFT JOIN commodities     c ON c.id = i.commodity_id
-       LEFT JOIN inspection_pdfs p ON p.inspection_id = i.id
-       WHERE i.id = @id`,
-      { id: parseInt(id) }
-    )
-
-    if (!result.recordset?.length)
-      return NextResponse.json({ msg: 'Inspección no encontrada' }, { status: 404 })
-
-    const row = result.recordset[0]
-
-    const metricsRaw = safeJson(row.metrics)
-    const metrics = {
-      template_id: metricsRaw.template_id ?? null,
-      values:      metricsRaw.values      ?? {}
-    }
-
-    const header_photos = safeJson(row.header_photos)
-
-    return NextResponse.json({ ...row, metrics, header_photos })
+    const nid = Number(id)
+    if (!Number.isInteger(nid) || nid <= 0) return fail(400, 'ID inválido')
+    return ok(await getInspectionDetail(nid, auth.user))
   } catch (e) {
-    console.error('❌ [GET inspecciones/id]', e)
-    return NextResponse.json({ msg: 'Error: ' + e.message }, { status: 500 })
+    if (e.status) return fail(e.status, e.message)
+    return serverError('GET inspecciones/:id', e)
   }
 }
 
-// PUT — Actualizar cabecera de una inspección
+// PUT — editar cabecera (solo admin). Recalcula resultados y audita.
 export async function PUT(req, context) {
-  const v = verifyTokenFromCookies(req)
-  if (!v.ok || !v.user) return NextResponse.json({ msg: 'No autenticado' }, { status: 401 })
-  if (v.user.role !== 'admin') return NextResponse.json({ msg: 'Solo admin' }, { status: 403 })
+  const auth = requireAuth(req, { role: 'admin' })
+  if (auth.response) return auth.response
 
   try {
     const { id } = await context.params
-    const body = await req.json().catch(() => ({}))
+    const nid = Number(id)
+    if (!Number.isInteger(nid) || nid <= 0) return fail(400, 'ID inválido')
+    const body = await req.json().catch(() => null)
+    if (!body) return fail(400, 'Body JSON inválido')
 
-    const {
-      producer, lot, variety, caliber,
-      packaging_code, packaging_type, packaging_date,
-      net_weight,
-      brix_avg, brix_min, brix_max, brix_moda,
-      temp_water, temp_ambient, temp_pulp,
-      diameter_min, diameter_max,
-      notes,
-      header_photos
-    } = body
+    await withTransaction(async (tx) => {
+      const exists = await txRequest(tx, { id: nid }).query(
+        `SELECT pallet_id FROM qc.inspections WHERE id=@id AND deleted_at IS NULL`)
+      if (!exists.recordset?.length) throw appError(404, 'Inspección no encontrada')
 
-    await query(
-      `UPDATE inspections SET
-        producer       = @producer,
-        lot            = @lot,
-        variety        = @variety,
-        caliber        = @caliber,
-        packaging_code = @packaging_code,
-        packaging_type = @packaging_type,
-        packaging_date = @packaging_date,
-        net_weight     = @net_weight,
-        brix_avg       = @brix_avg,
-        brix_min       = @brix_min,
-        brix_max       = @brix_max,
-        brix_moda      = @brix_moda,
-        temp_water     = @temp_water,
-        temp_ambient   = @temp_ambient,
-        temp_pulp      = @temp_pulp,
-        diameter_min   = @diameter_min,
-        diameter_max   = @diameter_max,
-        notes          = @notes,
-        header_photos  = @header_photos
-       WHERE id = @id`,
-      {
-        id:             parseInt(id),
-        producer:       producer       || null,
-        lot:            lot            || null,
-        variety:        variety        || null,
-        caliber:        caliber        || null,
-        packaging_code: packaging_code || null,
-        packaging_type: packaging_type || null,
-        packaging_date: packaging_date || null,
-        net_weight:     net_weight     != null && net_weight     !== '' ? Number(net_weight)     : null,
-        brix_avg:       brix_avg       != null && brix_avg       !== '' ? Number(brix_avg)       : null,
-        brix_min:       brix_min       != null && brix_min       !== '' ? Number(brix_min)       : null,
-        brix_max:       brix_max       != null && brix_max       !== '' ? Number(brix_max)       : null,
-        brix_moda:      brix_moda      != null && brix_moda      !== '' ? Number(brix_moda)      : null,
-        temp_water:     temp_water     != null && temp_water     !== '' ? Number(temp_water)     : null,
-        temp_ambient:   temp_ambient   != null && temp_ambient   !== '' ? Number(temp_ambient)   : null,
-        temp_pulp:      temp_pulp      != null && temp_pulp      !== '' ? Number(temp_pulp)      : null,
-        diameter_min:   diameter_min   != null && diameter_min   !== '' ? Number(diameter_min)   : null,
-        diameter_max:   diameter_max   != null && diameter_max   !== '' ? Number(diameter_max)   : null,
-        notes:          notes          || null,
-        header_photos:  header_photos  ? JSON.stringify(header_photos) : null
+      await txRequest(tx, {
+        id: nid,
+        brix_avg: num(body.brix_avg), brix_min: num(body.brix_min), brix_max: num(body.brix_max), brix_mode: num(body.brix_moda ?? body.brix_mode),
+        diameter_min: num(body.diameter_min), diameter_max: num(body.diameter_max),
+        temp_water: num(body.temp_water), temp_ambient: num(body.temp_ambient), temp_pulp: num(body.temp_pulp),
+        net_weight: num(body.net_weight) > 0 ? num(body.net_weight) : null,
+        notes: body.notes != null ? String(body.notes) : null,
+        uid: auth.user.id
+      }).query(
+        `UPDATE qc.inspections SET
+           brix_avg=@brix_avg, brix_min=@brix_min, brix_max=@brix_max, brix_mode=@brix_mode,
+           diameter_min=@diameter_min, diameter_max=@diameter_max,
+           temp_water=@temp_water, temp_ambient=@temp_ambient, temp_pulp=@temp_pulp,
+           net_weight=@net_weight, notes=@notes, updated_by_user_id=@uid, updated_at=SYSUTCDATETIME()
+         WHERE id=@id`)
+
+      // Actualiza variedad/productor del lote asociado, si vienen
+      const palletId = exists.recordset[0].pallet_id
+      if (palletId && (body.variety != null || body.producer != null)) {
+        await txRequest(tx, { pid: palletId, variety: body.variety != null ? String(body.variety) : null, producer: body.producer != null ? String(body.producer) : null }).query(
+          `UPDATE l SET
+              variety = COALESCE(@variety, l.variety),
+              producer_id = COALESCE((SELECT id FROM qc.producers WHERE name=@producer), l.producer_id)
+           FROM qc.lots l JOIN qc.pallets p ON p.lot_id=l.id WHERE p.id=@pid`)
       }
-    )
 
-    return NextResponse.json({ ok: true, msg: 'Cabecera actualizada' })
+      await computeAndStoreResults(tx, nid)
+      await txRequest(tx, { a: auth.user.id, pk: String(nid) }).query(
+        `INSERT INTO qc.audit_log (actor_user_id, action, table_name, record_pk) VALUES (@a, 'UPDATE', 'qc.inspections', @pk)`)
+    }, { actorId: auth.user.id })
+
+    return ok({ ok: true, msg: 'Cabecera actualizada' })
   } catch (e) {
-    console.error('❌ [PUT inspecciones/id]', e)
-    return NextResponse.json({ msg: 'Error: ' + e.message }, { status: 500 })
+    if (e.status) return fail(e.status, e.message)
+    return serverError('PUT inspecciones/:id', e)
   }
 }
