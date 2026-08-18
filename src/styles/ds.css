@@ -218,6 +218,23 @@ body {
 .textarea { height: auto; padding: 11px 13px; resize: vertical; line-height: 1.5; }
 .input:focus, .select:focus, .textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); background: var(--surface); }
 .input::placeholder, .textarea::placeholder { color: var(--text-faint); }
+
+/* Autofill del navegador (Safari/Chrome pintan los campos de amarillo al
+   autorellenar): forzamos los tokens del design system. El box-shadow interno
+   gigante es la única forma fiable de tapar ese fondo. */
+.input:-webkit-autofill,
+.input:-webkit-autofill:hover,
+.input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--surface-2) inset;
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+  border: 1px solid var(--border-strong);
+  transition: background-color 999999s ease-in-out 0s;
+}
+.input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 1000px var(--surface) inset;
+  border-color: var(--accent);
+}
 .select { appearance: none; cursor: pointer; background-image: none; }
 
 /* ---- CARD ---- */
