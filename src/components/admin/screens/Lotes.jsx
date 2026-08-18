@@ -59,7 +59,7 @@ export default function LotesScreen({ onToast }) {
             <thead><tr><th>{t('tbl.lote')}</th><th>{t('tbl.commodity')}</th><th>{t('tbl.productor')}</th><th>{t('tbl.variedad')}</th><th className="num">{t('lot.pallets')}</th><th className="num">{t('lot.inspections')}</th><th>{t('tbl.creado')}</th><th></th></tr></thead>
             <tbody>
               {filtered.map(l => {
-                const v = commodityVisual(l.commodity_code)
+                const v = commodityVisual(l.commodity_code, t)
                 return (
                   <tr key={l.id}>
                     <td className="cell-strong mono" style={{ fontSize: 12.5 }}>{l.lot_code}</td>

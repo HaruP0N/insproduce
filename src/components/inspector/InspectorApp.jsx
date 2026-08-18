@@ -90,7 +90,7 @@ function QueueScreen({ assigned, loading, onStart }) {
       ) : (
         <div className="queue-grid stagger">
           {assigned.map(task => {
-            const c = commodityVisual(task.commodity_code)
+            const c = commodityVisual(task.commodity_code, t)
             return (
               <section className="card task-card" key={task.id}>
                 <div className="task-top">
@@ -146,7 +146,7 @@ function CompletedScreen({ completed, loading, onOpen }) {
             </tr></thead>
             <tbody>
               {completed.map(i => {
-                const c = commodityVisual(i.commodity_code)
+                const c = commodityVisual(i.commodity_code, t)
                 return (
                   <tr key={i.id} onClick={() => onOpen(i)} style={{ cursor: 'pointer' }}>
                     <td className="mono" style={{ color: 'var(--text-dim)' }}>{i.fecha}</td>
@@ -192,7 +192,7 @@ function CompletedDrawer({ item, onClose }) {
     return () => { alive = false }
   }, [item.id])
 
-  const c = commodityVisual(item.commodity_code)
+  const c = commodityVisual(item.commodity_code, t)
   const r = RES[item.resolucion]
   const fmtv = (m) => m.value_num != null ? String(m.value_num) : (m.option_value ?? (m.value_bool != null ? (m.value_bool ? t('cap.yes') : t('cap.no')) : (m.value_text ?? '—')))
 
@@ -376,7 +376,7 @@ const EMPTY_HEADER = {
 
 function CaptureForm({ task, onSave, onCancel, onError }) {
   const { t } = useI18n()
-  const c = commodityVisual(task.commodity_code)
+  const c = commodityVisual(task.commodity_code, t)
   const [fields, setFields] = useState([])
   const [loadingTpl, setLoadingTpl] = useState(true)
   const [header, setHeader] = useState(EMPTY_HEADER)

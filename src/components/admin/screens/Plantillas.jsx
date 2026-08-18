@@ -131,7 +131,7 @@ export default function PlantillasScreen({ onToast }) {
             <thead><tr><th>{t('nav.plantillas')}</th><th>{t('tbl.commodity')}</th><th className="num">{t('tpl.version')}</th><th className="num">{t('tpl.fields')}</th><th>{t('tbl.estado')}</th><th>{t('tbl.creado')}</th><th></th></tr></thead>
             <tbody>
               {rows.map(tp => {
-                const v = commodityVisual(tp.commodity_code)
+                const v = commodityVisual(tp.commodity_code, t)
                 return (
                   <tr key={tp.id}>
                     <td className="cell-strong">{tp.name}</td>

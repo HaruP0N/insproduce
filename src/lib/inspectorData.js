@@ -14,12 +14,26 @@ async function fetchJSON(path, opts) {
   return data
 }
 
-// commodity_code (qc, inglés) → presentación del prototipo
-export function commodityVisual(code) {
-  const c = String(code || '').toUpperCase()
-  if (c === 'STRAWBERRY' || c === 'FRUTILLA') return { key: 'frutilla', icon: 'leaf', label: 'Frutilla' }
-  if (c === 'BLUEBERRY' || c === 'ARANDANO') return { key: 'arandano', icon: 'grape', label: 'Arándano' }
-  return { key: 'arandano', icon: 'grape', label: code || '—' }
+// commodity_code (qc, inglés) → presentación (ícono propio + color + nombre localizado)
+const COMMODITY_ALIASES = { FRUTILLA: 'STRAWBERRY', ARANDANO: 'BLUEBERRY', RED_CURRANTS: 'REDCURRANT' }
+const COMMODITY_VISUALS = {
+  BLUEBERRY:  { key: 'arandano',  icon: 'blueberry',  es: 'Arándano' },
+  STRAWBERRY: { key: 'frutilla',  icon: 'strawberry', es: 'Frutilla' },
+  RASPBERRY:  { key: 'frambuesa', icon: 'raspberry',  es: 'Frambuesa' },
+  BLACKBERRY: { key: 'mora',      icon: 'blackberry', es: 'Mora' },
+  REDCURRANT: { key: 'grosella',  icon: 'currant',    es: 'Grosella' },
+  CHERRY:     { key: 'cereza',    icon: 'currant',    es: 'Cereza' },
+}
+
+// t es opcional: con él, el nombre sale traducido (commodity.<CODE> en el diccionario)
+export function commodityVisual(code, t) {
+  let c = String(code || '').toUpperCase()
+  c = COMMODITY_ALIASES[c] || c
+  const v = COMMODITY_VISUALS[c]
+  if (!v) return { key: 'arandano', icon: 'blueberry', label: code || '—' }
+  const translated = t ? t('commodity.' + c) : null
+  const label = translated && translated !== 'commodity.' + c ? translated : v.es
+  return { key: v.key, icon: v.icon, label }
 }
 
 // ── Asignadas (cola de trabajo del inspector) ──

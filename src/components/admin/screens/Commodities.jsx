@@ -68,7 +68,7 @@ export default function CommoditiesScreen({ onToast }) {
             <thead><tr><th>{t('tbl.commodity')}</th><th>{t('tbl.codigo')}</th><th className="num">{t('com.templates')}</th><th className="num">{t('com.tolerances')}</th><th>{t('tbl.estado')}</th><th></th></tr></thead>
             <tbody>
               {rows.map(c => {
-                const v = commodityVisual(c.code)
+                const v = commodityVisual(c.code, t)
                 return (
                   <tr key={c.code}>
                     <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontSize: 13 }}><span className={'commodity-ico ' + v.key} style={{ width: 28, height: 28, borderRadius: 7 }}><Icon name={v.icon} size={15} /></span><span className="cell-strong">{c.name}</span></span></td>

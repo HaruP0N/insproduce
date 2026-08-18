@@ -22,6 +22,13 @@ export const DICT = {
   /* ── navegación ── */
   'nav.dashboard': { es: 'Dashboard', en: 'Dashboard' },
   'nav.inspecciones': { es: 'Inspecciones', en: 'Inspections' },
+  'commodity.BLUEBERRY': { es: 'Arándano', en: 'Blueberry' },
+  'commodity.STRAWBERRY': { es: 'Frutilla', en: 'Strawberry' },
+  'commodity.RASPBERRY': { es: 'Frambuesa', en: 'Raspberry' },
+  'commodity.BLACKBERRY': { es: 'Mora', en: 'Blackberry' },
+  'commodity.REDCURRANT': { es: 'Grosella', en: 'Red Currant' },
+  'commodity.CHERRY': { es: 'Cereza', en: 'Cherry' },
+
   'nav.arribos': { es: 'Arribos', en: 'Arrivals' },
   'title.arribos': { es: 'Arribos', en: 'Arrivals' },
   'sub.arribos': { es: 'Contenedores y sus pallets inspeccionados', en: 'Containers and their inspected pallets' },

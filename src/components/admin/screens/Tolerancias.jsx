@@ -110,7 +110,7 @@ export default function ToleranciasScreen({ onToast }) {
             <thead><tr><th>{t('tol.standard')}</th><th>{t('tbl.commodity')}</th><th className="num">{t('tol.defectsWithTol')}</th><th></th></tr></thead>
             <tbody>
               {standards.map(s => {
-                const v = commodityVisual(s.commodity_code)
+                const v = commodityVisual(s.commodity_code, t)
                 return (
                   <tr key={s.id} onClick={() => openStandard(s.id)} style={{ cursor: 'pointer', background: sel?.standard.id === s.id ? 'var(--accent-soft)' : undefined }}>
                     <td className="cell-strong">{s.name}</td>

@@ -4,6 +4,7 @@ import { Card, StatusBadge } from '@/components/proto/ui'
 import { Icon } from '@/components/proto/Icon'
 import { Modal, Field, ScreenState, RowAction, ConfirmDialog } from './_ui'
 import { useI18n } from '@/lib/i18n'
+import { commodityVisual } from '@/lib/inspectorData'
 
 const api = async (path, opts = {}) => {
   const res = await fetch(path, { credentials: 'include', headers: { 'Content-Type': 'application/json' }, ...opts })
@@ -226,7 +227,7 @@ export default function ArribosScreen({ onToast, onAddInspection, onReinspect })
               <tbody>
                 {(list || []).map((a) => (
                   <tr key={a.id} onClick={() => setOpenId(a.id)} style={{ cursor: 'pointer' }}>
-                    <td><div className="cell-strong mono" style={{ fontSize: 12.5 }}>{a.container}</div><div className="cell-dim">{a.commodity_name || ''}</div></td>
+                    <td><div className="cell-strong mono" style={{ fontSize: 12.5 }}>{a.container}</div><div className="cell-dim">{a.commodity_code ? commodityVisual(a.commodity_code, t).label : ''}</div></td>
                     <td>{a.warehouse || '—'}</td>
                     <td className="mono" style={{ color: 'var(--text-dim)' }}>{fmtDate(a.arrival_date)}</td>
                     <td className="num">{a.week_no ?? '—'}</td>

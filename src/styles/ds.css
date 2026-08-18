@@ -414,6 +414,10 @@ body {
 .commodity-ico { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; flex: none; }
 .commodity-ico.arandano { background: oklch(0.55 0.16 280 / 0.16); color: oklch(0.66 0.16 282); }
 .commodity-ico.frutilla { background: oklch(0.6 0.18 22 / 0.15); color: oklch(0.66 0.19 25); }
+.commodity-ico.frambuesa { background: oklch(0.62 0.19 0 / 0.15); color: oklch(0.62 0.2 2); }
+.commodity-ico.mora { background: oklch(0.45 0.14 310 / 0.16); color: oklch(0.5 0.15 312); }
+.commodity-ico.grosella { background: oklch(0.55 0.2 20 / 0.14); color: oklch(0.56 0.21 22); }
+.commodity-ico.cereza { background: oklch(0.5 0.18 15 / 0.15); color: oklch(0.52 0.19 17); }
 
 /* queue cards */
 .queue-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(328px, 1fr)); gap: 16px; }

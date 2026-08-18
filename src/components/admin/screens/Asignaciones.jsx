@@ -100,7 +100,7 @@ export default function AsignacionesScreen({ onToast }) {
             <thead><tr><th>{t('tbl.fecha')}</th><th>{t('tbl.loteProductor')}</th><th>{t('tbl.commodity')}</th><th>{t('tbl.inspector')}</th><th></th></tr></thead>
             <tbody>
               {rows.map(a => {
-                const c = commodityVisual(a.commodity_code)
+                const c = commodityVisual(a.commodity_code, t)
                 return (
                   <tr key={a.id}>
                     <td className="mono" style={{ color: 'var(--text-dim)' }}>{fechaCorta(a.created_at)}</td>

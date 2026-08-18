@@ -5,6 +5,7 @@ import { Icon } from '@/components/proto/Icon'
 import { Field } from './_ui'
 import ImageUploader from '@/components/ImageUploader'
 import { useI18n } from '@/lib/i18n'
+import { commodityVisual } from '@/lib/inspectorData'
 
 const EMPTY_HEADER = {
   producer: '', lot: '', variety: '', caliber: '',
@@ -184,7 +185,7 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
           <div style={GRID3}>
             <Field label={t('ni.commodity')} required>
               <select className="select" value={code} onChange={e => setCode(e.target.value)}>
-                {commodities.map(c => <option key={c.code} value={c.code}>{c.es_name || c.name || c.code}</option>)}
+                {commodities.map(c => <option key={c.code} value={c.code}>{commodityVisual(c.code, t).label}</option>)}
               </select>
             </Field>
             <Field label={t('ni.standard')} help={t('ni.standardHelp')}>
