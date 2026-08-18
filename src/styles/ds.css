@@ -792,3 +792,11 @@ tr:hover .row-actions { opacity: 1; }
   .portal-top .help-link { display: none; }
   .portal-brand .brand-sub { display: none; }
 }
+
+/* Dropzone de carga masiva */
+.dropzone-qc {
+  border: 2px dashed var(--border-strong); border-radius: var(--r-md);
+  padding: 30px 18px; text-align: center; cursor: pointer;
+  background: var(--surface-2); transition: border-color .18s, background .18s;
+}
+.dropzone-qc:hover, .dropzone-qc.over { border-color: var(--accent); background: var(--accent-soft); }

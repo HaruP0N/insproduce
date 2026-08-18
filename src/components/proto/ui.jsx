@@ -8,6 +8,7 @@ export const NAV = [
   { group: null, items: [
     { id: 'dashboard', icon: 'dashboard' },
     { id: 'inspecciones', icon: 'clipboard' },
+    { id: 'carga', icon: 'layers' },
     { id: 'arribos', icon: 'package' },
     { id: 'asignaciones', icon: 'users' },
     { id: 'lotes', icon: 'boxes' },

@@ -17,6 +17,7 @@ import ToleranciasScreen from '@/components/admin/screens/Tolerancias'
 import EditarInspeccion from '@/components/admin/screens/EditarInspeccion'
 import NuevaInspeccionScreen from '@/components/admin/screens/NuevaInspeccion'
 import ArribosScreen from '@/components/admin/screens/Arribos'
+import CargaMasivaScreen from '@/components/admin/screens/CargaMasiva'
 
 function DashSkeleton() {
   return (
@@ -87,6 +88,7 @@ export default function AdminApp() {
   else if (route === 'reportes') screen = <ReportesScreen list={list} dash={dash} onToast={showToast} />
   else if (route === 'integraciones') screen = <IntegracionesScreen onToast={showToast} />
   else if (route === 'tolerancias') screen = <ToleranciasScreen onToast={showToast} />
+  else if (route === 'carga') screen = <CargaMasivaScreen onToast={showToast} onDone={reloadData} />
   else if (route === 'arribos') screen = <ArribosScreen onToast={showToast}
     onAddInspection={(a) => { setInspCtx({ arrival: a }); navigate('nueva') }}
     onReinspect={(a, i) => { setInspCtx({ arrival: a, reinspect: i }); navigate('nueva') }} />
