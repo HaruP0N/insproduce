@@ -10,7 +10,8 @@ export const BANDS = [
 /** Lista de estándares con commodity y nº de tolerancias definidas. */
 export async function listStandards() {
   const r = await query(
-    `SELECT s.id, s.name, s.active, c.code AS commodity_code, c.name AS commodity_name,
+    `SELECT s.id, s.name, s.active, s.updated_at, s.source_doc,
+            c.code AS commodity_code, c.name AS commodity_name,
             (SELECT COUNT(DISTINCT t.defect_id) FROM qc.defect_tolerances t WHERE t.standard_id=s.id) AS defects_with_tol
      FROM qc.quality_standards s
      JOIN qc.commodities c ON c.id=s.commodity_id
@@ -26,14 +27,15 @@ export async function createStandard({ commodityCode, name }) {
   if (!c.recordset?.length) throw appError(404, `Commodity ${code} no encontrado`)
   const dup = await query(`SELECT 1 FROM qc.quality_standards WHERE commodity_id=@cid AND name=@n`, { cid: c.recordset[0].id, n })
   if (dup.recordset?.length) throw appError(409, 'Ya existe un estándar con ese nombre para el commodity')
-  const r = await query(`INSERT INTO qc.quality_standards (name, commodity_id, active) OUTPUT INSERTED.id VALUES (@n, @cid, 1)`, { n, cid: c.recordset[0].id })
+  const r = await query(`INSERT INTO qc.quality_standards (name, commodity_id, active, updated_at) OUTPUT INSERTED.id VALUES (@n, @cid, 1, SYSUTCDATETIME())`, { n, cid: c.recordset[0].id })
   return r.recordset[0].id
 }
 
 /** Defectos del commodity del estándar + sus 5 bandas (las que falten van en blanco). */
 export async function getStandardDetail(standardId) {
   const s = await query(
-    `SELECT s.id, s.name, s.active, s.commodity_id, c.code AS commodity_code, c.name AS commodity_name
+    `SELECT s.id, s.name, s.active, s.commodity_id, s.updated_at, s.source_doc,
+            c.code AS commodity_code, c.name AS commodity_name
      FROM qc.quality_standards s JOIN qc.commodities c ON c.id=s.commodity_id WHERE s.id=@id`, { id: standardId })
   const std = s.recordset?.[0]
   if (!std) throw appError(404, 'Estándar no encontrado')
@@ -57,7 +59,7 @@ export async function getStandardDetail(standardId) {
     }),
     hasTol: byDefect.has(d.id),
   }))
-  return { standard: { id: std.id, name: std.name, active: std.active, commodity_code: std.commodity_code, commodity_name: std.commodity_name }, defects }
+  return { standard: { id: std.id, name: std.name, active: std.active, commodity_code: std.commodity_code, commodity_name: std.commodity_name, updated_at: std.updated_at, source_doc: std.source_doc }, defects }
 }
 
 /** Reemplaza las 5 bandas de un defecto en un estándar. */
@@ -77,5 +79,8 @@ export async function upsertDefectTolerances(standardId, defectId, bands) {
         `INSERT INTO qc.defect_tolerances (standard_id, defect_id, band, band_label, min_pct, max_pct)
          VALUES (@sid, @did, @band, @bl, @mn, @mx)`)
     }
+    // Sello de última actualización del estándar (lo muestra la pantalla Tolerancias)
+    await txRequest(tx, { sid: standardId }).query(
+      `UPDATE qc.quality_standards SET updated_at=SYSUTCDATETIME() WHERE id=@sid`)
   })
 }

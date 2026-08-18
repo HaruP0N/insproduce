@@ -1,6 +1,7 @@
 'use client'
 // Primitivas reutilizables para las pantallas CRUD del admin.
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Icon } from '@/components/proto/Icon'
 import { useI18n } from '@/lib/i18n'
 
@@ -10,7 +11,10 @@ export function Modal({ title, icon, onClose, children, footer, size }) {
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
   }, [onClose])
-  return (
+  // Portal al <body>: si un ancestro tiene transform (animaciones fade-up),
+  // position:fixed se ancla a ese ancestro y el modal queda descentrado.
+  if (typeof document === 'undefined') return null
+  return createPortal(
     <>
       <div className="scrim" onClick={onClose} />
       <div className="modal-wrap" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -24,7 +28,8 @@ export function Modal({ title, icon, onClose, children, footer, size }) {
           {footer && <div className="modal-foot">{footer}</div>}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }
 

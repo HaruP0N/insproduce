@@ -74,7 +74,8 @@ function FragmentRow({ b, i, setB }) {
 }
 
 export default function ToleranciasScreen({ onToast }) {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
+  const [filterCom, setFilterCom] = useState('')
   const [standards, setStandards] = useState([])
   const [commodities, setCommodities] = useState([])
   const [loading, setLoading] = useState(true)
@@ -101,21 +102,30 @@ export default function ToleranciasScreen({ onToast }) {
     <div className="content-inner fade-up">
       <div className="crud-toolbar">
         <span style={{ fontSize: 13, color: 'var(--text-faint)' }}>{t('tol.count', { n: standards.length })}</span>
+        <select className="select" style={{ width: 'auto', marginLeft: 12 }} value={filterCom} onChange={e => setFilterCom(e.target.value)}>
+          <option value="">{t('tol.filterAll')}</option>
+          {[...new Set(standards.map(s => s.commodity_code))].sort().map(code => (
+            <option key={code} value={code}>{commodityVisual(code, t).label}</option>
+          ))}
+        </select>
         <button className="btn btn-primary" style={{ marginLeft: 'auto' }} onClick={() => setNewStd(true)}><Icon name="plus" size={15} stroke={2.2} />{t('tol.new')}</button>
       </div>
 
       <Card pad={true}>
         <ScreenState loading={loading} error={error} empty={!loading && !error && standards.length === 0} emptyIcon="tolerance" emptyText={t('tol.empty')}>
           <table className="tbl">
-            <thead><tr><th>{t('tol.standard')}</th><th>{t('tbl.commodity')}</th><th className="num">{t('tol.defectsWithTol')}</th><th></th></tr></thead>
+            <thead><tr><th>{t('tol.standard')}</th><th>{t('tbl.commodity')}</th><th className="num">{t('tol.defectsWithTol')}</th><th>{t('tol.updated')}</th><th></th></tr></thead>
             <tbody>
-              {standards.map(s => {
+              {standards.filter(s => !filterCom || s.commodity_code === filterCom).map(s => {
                 const v = commodityVisual(s.commodity_code, t)
                 return (
                   <tr key={s.id} onClick={() => openStandard(s.id)} style={{ cursor: 'pointer', background: sel?.standard.id === s.id ? 'var(--accent-soft)' : undefined }}>
                     <td className="cell-strong">{s.name}</td>
                     <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5 }}><span className={'commodity-ico ' + v.key} style={{ width: 24, height: 24, borderRadius: 6 }}><Icon name={v.icon} size={13} /></span>{v.label}</span></td>
                     <td className="num">{s.defects_with_tol}</td>
+                    <td className="mono" style={{ color: 'var(--text-dim)', fontSize: 12 }} title={s.source_doc || ''}>
+                      {s.updated_at ? new Date(s.updated_at).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-CL') : '—'}
+                    </td>
                     <td style={{ width: 30, color: 'var(--text-faint)' }}><Icon name="chevRight" size={16} /></td>
                   </tr>
                 )
@@ -126,7 +136,12 @@ export default function ToleranciasScreen({ onToast }) {
       </Card>
 
       {(sel || selLoading) && (
-        <Card style={{ marginTop: 16 }} pad={true} title={sel ? t('tol.detailTitle', { name: sel.standard.name }) : t('common.loading')} sub={sel ? sel.standard.commodity_name : ''}>
+        <Card style={{ marginTop: 16 }} pad={true} title={sel ? t('tol.detailTitle', { name: sel.standard.name }) : t('common.loading')}
+          sub={sel ? [
+            commodityVisual(sel.standard.commodity_code, t).label,
+            sel.standard.source_doc,
+            sel.standard.updated_at ? `${t('tol.updated')}: ${new Date(sel.standard.updated_at).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-CL')}` : null,
+          ].filter(Boolean).join(' · ') : ''}>
           {selLoading ? <div className="empty" style={{ padding: 40 }}><Icon name="clock" size={18} /> {t('common.loading')}</div> : (
             <table className="tbl">
               <thead><tr><th>{t('tol.defect')}</th><th>{t('tol.family')}</th><th>{t('tol.bandsCol', { unit })}</th><th></th></tr></thead>

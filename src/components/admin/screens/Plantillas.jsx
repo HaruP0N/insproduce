@@ -60,7 +60,7 @@ function TemplateModal({ tpl, commodities, onClose, onSaved, onToast }) {
   }
 
   return (
-    <Modal size="lg" title={editing ? t('tpl.editTitle', { name: tpl.commodity_name, ver: tpl.version }) : t('tpl.new')} icon="template" onClose={onClose}
+    <Modal size="lg" title={editing ? t('tpl.editTitle', { name: commodityVisual(tpl.commodity_code, t).label, ver: tpl.version }) : t('tpl.new')} icon="template" onClose={onClose}
       footer={<><button className="btn" onClick={onClose} disabled={busy}>{t('common.cancel')}</button><button className="btn btn-primary" onClick={submit} disabled={busy || loading}><Icon name="check" size={15} />{busy ? t('common.saving') : (editing ? t('tpl.editFields') : t('tpl.createTpl'))}</button></>}>
       {loading ? <div className="empty" style={{ padding: 40 }}><Icon name="clock" size={18} /> {t('common.loading')}</div> : (
         <>

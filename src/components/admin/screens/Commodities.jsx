@@ -71,7 +71,7 @@ export default function CommoditiesScreen({ onToast }) {
                 const v = commodityVisual(c.code, t)
                 return (
                   <tr key={c.code}>
-                    <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontSize: 13 }}><span className={'commodity-ico ' + v.key} style={{ width: 28, height: 28, borderRadius: 7 }}><Icon name={v.icon} size={15} /></span><span className="cell-strong">{c.name}</span></span></td>
+                    <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontSize: 13 }}><span className={'commodity-ico ' + v.key} style={{ width: 28, height: 28, borderRadius: 7 }}><Icon name={v.icon} size={15} /></span><span className="cell-strong">{v.label}</span></span></td>
                     <td className="mono" style={{ color: 'var(--text-dim)', fontSize: 12.5 }}>{c.code}</td>
                     <td className="num">{c.templates}</td>
                     <td className="num">{c.standards > 0 ? c.standards : <span style={{ color: 'var(--text-faint)' }}>—</span>}</td>
