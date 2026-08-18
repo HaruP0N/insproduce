@@ -694,3 +694,25 @@ tr:hover .row-actions { opacity: 1; }
   .topbar { flex-wrap: wrap; row-gap: 8px; }
   .topbar-actions { flex-wrap: wrap; justify-content: flex-end; }
 }
+
+/* Sparkline nunca más ancha que su tarjeta */
+.kpi-spark { overflow: hidden; }
+.kpi-spark svg { max-width: 100%; }
+
+/* KPIs compactos en móvil */
+@media (max-width: 700px) {
+  .card.kpi { padding: 13px 13px 11px; }
+  .kpi-ico { width: 25px; height: 25px; border-radius: 7px; }
+  .kpi-ico svg { width: 14px; height: 14px; }
+  .kpi-label { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi-value { font-size: 24px; margin-top: 5px; }
+  .kpi-value .unit { font-size: 13px; }
+  .kpi-foot { font-size: 11px; margin-top: 4px; white-space: nowrap; overflow: hidden; }
+}
+
+/* Login móvil: tarjeta centrada verticalmente (sin mar de espacio muerto) */
+@media (max-width: 860px) {
+  .portal-mobile { align-items: stretch; }
+  .pm-card { margin: auto; padding: 26px 22px 28px; }
+  .pm-seg button { padding: 11px 0; font-size: 13.5px; }
+}

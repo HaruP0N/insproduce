@@ -143,7 +143,7 @@ function DashboardScreen({ list, dash, onOpen, onNew }) {
     <div className="content-inner fade-up">
       <div className="grid kpi-row stagger" style={{ marginBottom: 16 }}>
         <KpiCard icon="clipboard" label={t('dash.kpi.inspecciones')} value={total} foot={t('dash.kpi.acumuladas')} spark={counts.length > 1 ? counts : [0, total]} sparkAccent="--accent" />
-        <KpiCard icon="sparkle" label={t('dash.kpi.scoreProm')} value={Number(s.avg_score) || 0} decimals={1} unit="/100" foot={t('dash.kpi.sobre100')} spark={scores.length > 1 ? scores : [Number(s.avg_score) || 0, Number(s.avg_score) || 0]} sparkAccent="--green" />
+        <KpiCard icon="sparkle" label={t('dash.kpi.scoreProm')} value={Number(s.avg_score) || 0} decimals={1} foot={t('dash.kpi.sobre100')} spark={scores.length > 1 ? scores : [Number(s.avg_score) || 0, Number(s.avg_score) || 0]} sparkAccent="--green" />
         <KpiCard icon="xCircle" label={t('dash.kpi.tasaRechazo')} value={rejectRate} suffix="%" foot={t('dash.kpi.deLotes', { r: rejected, t: total })} footTone={rejectRate > 0 ? 'down' : null} spark={[12, 18, 9, 21, 14, 20, 7, rejectRate]} sparkAccent="--red" />
         <KpiCard icon="clock" label={t('dash.kpi.pendRevision')} value={conditional} foot={t('dash.kpi.condicionales')} spark={[3, 2, 4, 1, 3, 2, 3, conditional]} sparkAccent="--amber" />
       </div>

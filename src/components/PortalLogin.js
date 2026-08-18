@@ -25,8 +25,14 @@ export default function PortalLogin() {
     return () => window.removeEventListener('keydown', h)
   }, [])
 
-  const open = (which) => { setError(''); setState(which) }
-  const close = () => { setError(''); setState('idle') }
+  // Al cambiar de rol se limpian las credenciales escritas: son cuentas distintas.
+  // ('idle' cuenta como 'ops': es la selección por defecto del switch móvil)
+  const open = (which) => {
+    const roleOf = (s) => (s === 'admin' ? 'admin' : 'ops')
+    if (roleOf(state) !== roleOf(which)) { setEmail(''); setPassword('') }
+    setError(''); setState(which)
+  }
+  const close = () => { setError(''); setEmail(''); setPassword(''); setState('idle') }
   const onPanelClick = (which) => { if (state !== 'idle' && state !== which) open(which) }
 
   const handleLogin = async (e) => {
