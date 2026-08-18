@@ -53,7 +53,7 @@ export default function FormularioInspeccion() {
   })
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f0f4f0', paddingBottom: 40 }}>
+    <div style={{ height: '100vh', overflowY: 'auto', background: '#f0f4f0', paddingBottom: 40 }}>
 
       {/* ── Header sticky ── */}
       <div style={{ position: 'sticky', top: 0, zIndex: 100, background: theme.color, color: '#fff', padding: '16px 20px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>

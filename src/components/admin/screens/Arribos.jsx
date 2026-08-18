@@ -47,7 +47,7 @@ function NuevoArribo({ onClose, onSaved, onToast }) {
           <Icon name="check" size={15} />{busy ? t('common.saving') : t('common.save')}
         </button>
       </>}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 14px' }}>
+      <div className="form-grid" style={{ gap: '0 14px' }}>
         <Field label={t('arr.container')} required>
           <input className="input" value={form.container} onChange={(e) => set('container', e.target.value)} placeholder="ZMOU5555481" />
         </Field>

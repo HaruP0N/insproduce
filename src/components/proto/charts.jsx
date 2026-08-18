@@ -111,7 +111,7 @@ export function Sparkline({ data, w = 100, h = 30, accent = '--accent' }) {
   const area = path + ` L${w},${h} L0,${h} Z`
   const uid = useId().replace(/:/g, '')
   return (
-    <svg width={w} height={h} style={{ display: 'block', overflow: 'visible' }}>
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block', overflow: 'visible', maxWidth: w }}>
       <defs><linearGradient id={'sp' + uid} x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stopColor={`var(${accent})`} stopOpacity="0.22" /><stop offset="100%" stopColor={`var(${accent})`} stopOpacity="0" />
       </linearGradient></defs>

@@ -54,13 +54,15 @@ export default function ReportesScreen({ list = [], dash, onToast }) {
       </div>
 
       <Card pad={true}>
-        <div className="crud-toolbar" style={{ marginBottom: 14 }}>
+        <div className="crud-toolbar rep-toolbar" style={{ marginBottom: 14 }}>
           <div className="seg">
             {RES_FILTERS.map(f => <button key={f.k} className={filter === f.k ? 'on' : ''} onClick={() => setFilter(f.k)}>{f.l}</button>)}
           </div>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-faint)' }}>{t('rep.from')} <input className="input" type="date" style={{ width: 150 }} value={from} onChange={e => setFrom(e.target.value)} /></label>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-faint)' }}>{t('rep.to')} <input className="input" type="date" style={{ width: 150 }} value={to} onChange={e => setTo(e.target.value)} /></label>
-          <button className="btn btn-primary" style={{ marginLeft: 'auto' }} onClick={exportCSV}><Icon name="download" size={15} />{t('rep.exportCsv')}</button>
+          <div className="date-range">
+            <label className="date-field">{t('rep.from')} <input className="input" type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
+            <label className="date-field">{t('rep.to')} <input className="input" type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+          </div>
+          <button className="btn btn-primary rep-export" onClick={exportCSV}><Icon name="download" size={15} />{t('rep.exportCsv')}</button>
         </div>
 
         <table className="tbl">

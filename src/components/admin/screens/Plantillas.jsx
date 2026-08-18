@@ -80,7 +80,7 @@ function TemplateModal({ tpl, commodities, onClose, onSaved, onToast }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {rows.map((r, i) => (
               <div key={i} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr 1.3fr 1fr', gap: 8, marginBottom: 8 }}>
+                <div className="tpl-field-row" style={{ marginBottom: 8 }}>
                   <select className="select" value={r.family} onChange={e => setRow(i, 'family', e.target.value)}>{FAMILIES.map(f => <option key={f} value={f}>{t('fam.' + f)}</option>)}</select>
                   <input className="input mono" value={r.code} onChange={e => setRow(i, 'code', e.target.value)} placeholder={t('tpl.codePh')} />
                   <input className="input" value={r.label} onChange={e => setRow(i, 'label', e.target.value)} placeholder={t('tpl.labelPh')} />

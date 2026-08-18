@@ -26,7 +26,7 @@ export default function MetricasForm({ groupedFields, values, photos, onField, o
               {cfg.description && <p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: 13 }}>{cfg.description}</p>}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap: 20 }}>
               {grpFields.map(f => (
                 <div key={f.key} style={{ background: '#f8fafc', borderRadius: 12, padding: 16, border: '1px solid #e5e7eb' }}>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 900, color: cfg.color, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>

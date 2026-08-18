@@ -155,9 +155,9 @@ function DashboardScreen({ list, dash, onOpen, onNew }) {
             : <div className="empty" style={{ padding: '60px 20px' }}>{t('dash.sinTendencia')}</div>}
         </Card>
         <Card title={t('dash.resoluciones')} sub={t('dash.nInspecciones', { n: total })}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginTop: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginTop: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
             <Donut segments={donutSegs} size={138} thickness={17} centerTop={total} centerBottom={t('dash.total')} />
-            <div className="legend" style={{ flex: 1 }}>
+            <div className="legend" style={{ flex: 1, minWidth: 170 }}>
               {resData.map(r => (
                 <div className="legend-row" key={r.k}>
                   <span className="sw" style={{ background: `var(${r.v})` }} />

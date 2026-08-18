@@ -480,12 +480,12 @@ function CaptureForm({ task, onSave, onCancel, onError }) {
 
   return (
     <div className="insp-inner wide fade-up">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         <button className="btn btn-sm" onClick={onCancel}><Icon name="chevLeft" size={16} />{t('cap.back')}</button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 4, minWidth: 0, flex: 1 }}>
           <div className={'commodity-ico ' + c.key} style={{ width: 40, height: 40 }}><Icon name={c.icon} size={21} /></div>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.15, whiteSpace: 'nowrap' }}>{c.label} <span className="mono" style={{ color: 'var(--text-faint)', fontSize: 14.5 }}>· {task.lote}</span></div>
+            <div style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.label} <span className="mono" style={{ color: 'var(--text-faint)', fontSize: 14.5 }}>· {task.lote}</span></div>
             <div style={{ fontSize: 12.5, color: 'var(--text-faint)' }}>{task.productor} · {task.variedad}</div>
           </div>
         </div>
@@ -517,7 +517,7 @@ function CaptureForm({ task, onSave, onCancel, onError }) {
           <SectionCard n="2" icon="thermometer" title={t('cap.s2')} sub={t('cap.s2sub')}>
             <div className="measure-group">
               <div className="measure-group-h"><Icon name="droplet" size={15} style={{ color: 'var(--accent-strong)' }} />{t('cap.brix')}</div>
-              <div className="measure-cols" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+              <div className="measure-cols cols-3">
                 <div><label className="field-label">{t('cap.average')}</label><UnitField value={header.brix_avg} onChange={v => setH('brix_avg', v)} unit="°Bx" /></div>
                 <div><label className="field-label">{t('cap.min')}</label><UnitField value={header.brix_min} onChange={v => setH('brix_min', v)} unit="°Bx" /></div>
                 <div><label className="field-label">{t('cap.max')}</label><UnitField value={header.brix_max} onChange={v => setH('brix_max', v)} unit="°Bx" /></div>
@@ -525,7 +525,7 @@ function CaptureForm({ task, onSave, onCancel, onError }) {
             </div>
             <div className="measure-group">
               <div className="measure-group-h"><Icon name="thermometer" size={15} style={{ color: 'var(--accent-strong)' }} />{t('cap.temp')}</div>
-              <div className="measure-cols" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+              <div className="measure-cols cols-3">
                 <div><label className="field-label">{t('cap.water')}</label><UnitField value={header.temp_water} onChange={v => setH('temp_water', v)} unit="°C" /></div>
                 <div><label className="field-label">{t('cap.ambient')}</label><UnitField value={header.temp_ambient} onChange={v => setH('temp_ambient', v)} unit="°C" /></div>
                 <div><label className="field-label">{t('cap.pulp')}</label><UnitField value={header.temp_pulp} onChange={v => setH('temp_pulp', v)} unit="°C" /></div>
@@ -533,7 +533,7 @@ function CaptureForm({ task, onSave, onCancel, onError }) {
             </div>
             <div className="measure-group">
               <div className="measure-group-h"><Icon name="ruler" size={15} style={{ color: 'var(--accent-strong)' }} />{t('cap.caliber')}</div>
-              <div className="measure-cols" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <div className="measure-cols cols-2">
                 <div><label className="field-label">{t('cap.min')}</label><UnitField value={header.diameter_min} onChange={v => setH('diameter_min', v)} unit="mm" /></div>
                 <div><label className="field-label">{t('cap.max')}</label><UnitField value={header.diameter_max} onChange={v => setH('diameter_max', v)} unit="mm" /></div>
               </div>
