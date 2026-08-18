@@ -16,6 +16,7 @@ import IntegracionesScreen from '@/components/admin/screens/Integraciones'
 import ToleranciasScreen from '@/components/admin/screens/Tolerancias'
 import EditarInspeccion from '@/components/admin/screens/EditarInspeccion'
 import NuevaInspeccionScreen from '@/components/admin/screens/NuevaInspeccion'
+import ArribosScreen from '@/components/admin/screens/Arribos'
 
 function DashSkeleton() {
   return (
@@ -39,6 +40,7 @@ export default function AdminApp() {
   const [dash, setDash] = useState(null)
   const [drawer, setDrawer] = useState(null)
   const [toast, setToast] = useState(null)
+  const [inspCtx, setInspCtx] = useState(null) // { arrival, reinspect } para Nueva inspección
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -85,7 +87,12 @@ export default function AdminApp() {
   else if (route === 'reportes') screen = <ReportesScreen list={list} dash={dash} onToast={showToast} />
   else if (route === 'integraciones') screen = <IntegracionesScreen onToast={showToast} />
   else if (route === 'tolerancias') screen = <ToleranciasScreen onToast={showToast} />
-  else if (route === 'nueva') screen = <NuevaInspeccionScreen onToast={showToast} onCancel={() => navigate('inspecciones')} onDone={() => { reloadData(); navigate('inspecciones') }} />
+  else if (route === 'arribos') screen = <ArribosScreen onToast={showToast}
+    onAddInspection={(a) => { setInspCtx({ arrival: a }); navigate('nueva') }}
+    onReinspect={(a, i) => { setInspCtx({ arrival: a, reinspect: i }); navigate('nueva') }} />
+  else if (route === 'nueva') screen = <NuevaInspeccionScreen onToast={showToast} ctx={inspCtx}
+    onCancel={() => { setInspCtx(null); navigate(inspCtx?.arrival ? 'arribos' : 'inspecciones') }}
+    onDone={() => { reloadData(); const back = inspCtx?.arrival ? 'arribos' : 'inspecciones'; setInspCtx(null); navigate(back) }} />
   else screen = <PlaceholderScreen route={route} />
 
   return (

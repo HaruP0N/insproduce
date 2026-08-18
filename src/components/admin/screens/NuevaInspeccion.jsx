@@ -28,7 +28,17 @@ const bareKey = (k) => { const dot = k.indexOf('.'); return dot === -1 ? k : k.s
 
 const GRID3 = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0 16px' }
 
-export default function NuevaInspeccionScreen({ onToast, onDone, onCancel }) {
+// Clasificación de firmeza Baxlo (manual FTF, escala Shore): Soft <60 · Sensitiva 61-74 · Firme ≥75
+export function baxloClass(v) {
+  if (v == null || v === '') return null
+  const n = Number(v)
+  if (!Number.isFinite(n)) return null
+  if (n < 60) return { label: 'Soft', bg: '#F7DFDF', fg: '#8A2727' }
+  if (n < 75) return { label: 'Sensitiva', bg: '#F3EDD6', fg: '#6B5300' }
+  return { label: 'Firme', bg: '#E3F2E8', fg: '#1D5E3A' }
+}
+
+export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }) {
   const { t } = useI18n()
   const [commodities, setCommodities] = useState([])
   const [code, setCode] = useState('')
@@ -40,6 +50,21 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel }) {
   const [values, setValues] = useState({})
   const [photos, setPhotos] = useState({})
   const [saving, setSaving] = useState(false)
+
+  // Contexto desde Arribos: pre-carga commodity y, en reinspección, los datos del pallet
+  useEffect(() => {
+    if (!ctx) return
+    if (ctx.arrival?.commodity_code) setCode(ctx.arrival.commodity_code)
+    if (ctx.reinspect) {
+      setHeader((p) => ({
+        ...p,
+        producer: ctx.reinspect.producer || '',
+        lot: ctx.reinspect.lot || '',
+        variety: ctx.reinspect.variety || '',
+      }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx])
 
   useEffect(() => {
     let alive = true
@@ -111,6 +136,8 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel }) {
         photos,
         assignment_id: null,
         standard_id: standardId ? Number(standardId) : null,
+        arrival_id: ctx?.arrival?.id ?? null,
+        reinspection_of: ctx?.reinspect?.id ?? null,
       }
       const res = await fetch('/api/inspecciones', {
         method: 'POST', credentials: 'include',
@@ -137,8 +164,21 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel }) {
     </Field>
   )
 
+  // Avisos del protocolo de muestreo (manual FTF)
+  const hints = []
+  const valOf = (frag) => Object.entries(values).some(([k, v]) => k.includes(frag) && Number(v) > 0)
+  if (valOf('decay') || valOf('mold')) hints.push(t('ni.hintDecay'))
+  if (valOf('underweight') || valOf('under_weight')) hints.push(t('ni.hintUnderweight'))
+  const bx = baxloClass(header.baxlo_mode || header.baxlo_min)
+
   return (
     <div className="content-inner fade-up">
+      {ctx?.arrival && (
+        <div className="form-help" style={{ marginBottom: 12, padding: '9px 13px', background: 'var(--surface-2, rgba(99,102,241,.06))', border: '1px solid var(--border)', borderRadius: 9, fontSize: 13 }}>
+          📦 {t('ni.arrivalBanner', { c: ctx.arrival.container })}
+          {ctx.reinspect && <> · ↺ {t('ni.reinspBanner', { id: ctx.reinspect.id, lot: ctx.reinspect.lot || '—' })}</>}
+        </div>
+      )}
       <div className="grid cols-2-1" style={{ alignItems: 'start', marginBottom: 16 }}>
         <Card title={t('ni.headerTitle')} sub={t('ni.headerSub')}>
           <div style={GRID3}>
@@ -196,7 +236,19 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel }) {
             <div><b>{t('ni.commodity')}:</b> {code || '—'}</div>
             <div><b>{t('ni.metrics')}:</b> {fields.length}</div>
             <div><b>{t('ni.photosCount')}:</b> {Object.values(photos).reduce((a, p) => a + p.length, 0)}</div>
+            {bx && (
+              <div><b>Baxlo:</b>{' '}
+                <span style={{ background: bx.bg, color: bx.fg, padding: '2px 9px', borderRadius: 999, fontSize: 11.5, fontWeight: 800 }}>
+                  {bx.label}
+                </span>
+              </div>
+            )}
           </div>
+          {hints.map((h, i) => (
+            <div key={i} className="form-help" style={{ color: '#9c6500', background: '#fdf6e3', border: '1px solid #eadfb8', borderRadius: 8, padding: '7px 10px', marginTop: 10 }}>
+              ⚠ {h}
+            </div>
+          ))}
           {tplErr && <div className="form-help" style={{ color: 'var(--red)', marginTop: 10 }}>{tplErr}</div>}
           <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
             <button className="btn" onClick={onCancel} disabled={saving}>{t('common.cancel')}</button>

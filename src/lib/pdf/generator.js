@@ -340,8 +340,12 @@ function buildAutoNotes(r, insp) {
     }
   }
   if (insp.temp_pulp != null) lines.push(`Pulp temperature at inspection: ${insp.temp_pulp}°.`)
-  if (insp.firmness_min != null || insp.firmness_max != null || insp.firmness_mode != null)
-    lines.push(`Baxlo (min / mode / max): ${insp.firmness_min ?? '—'} / ${insp.firmness_mode ?? '—'} / ${insp.firmness_max ?? '—'}.`)
+  if (insp.firmness_min != null || insp.firmness_max != null || insp.firmness_mode != null) {
+    // Clasificación del manual FTF: Soft <60 · Sensitiva 61-74 · Firme ≥75 (Shore)
+    const ref = insp.firmness_mode ?? insp.firmness_min
+    const cls = ref == null ? null : ref < 60 ? 'Soft' : ref < 75 ? 'Sensitive' : 'Firm'
+    lines.push(`Baxlo (min / mode / max): ${insp.firmness_min ?? '—'} / ${insp.firmness_mode ?? '—'} / ${insp.firmness_max ?? '—'}${cls ? ` — ${cls}` : ''}.`)
+  }
   return lines
 }
 

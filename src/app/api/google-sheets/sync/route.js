@@ -69,6 +69,13 @@ export async function POST(req) {
     }
     if (updates.length) await sheetsClient.batchUpdate(spreadsheetId, updates)
 
+    // Registrar la última sincronización (la muestra la pantalla Integraciones)
+    await query(
+      `MERGE qc.app_settings AS t USING (SELECT 'gsheets_last_sync' AS k) s ON t.setting_key=s.k
+       WHEN MATCHED THEN UPDATE SET setting_value=@v, updated_at=SYSUTCDATETIME()
+       WHEN NOT MATCHED THEN INSERT (setting_key, setting_value) VALUES (s.k, @v);`,
+      { v: new Date().toISOString() })
+
     return ok({ msg: 'Sincronización bidireccional completada', bd_to_sheet: newRows.length, sheet_to_bd: nuevas, nuevas, skipped, errores, total: inspecciones.length })
   } catch (e) {
     if (e.status) return fail(e.status, e.message)

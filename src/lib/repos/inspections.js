@@ -69,6 +69,22 @@ export async function createInspection(user, body) {
     if (!s.recordset?.length) throw appError(400, 'standard_id inválido para este commodity')
     standard = s.recordset[0]
   }
+
+  // Arribo (contenedor) al que pertenece esta inspección, si aplica
+  let arrivalId = null
+  if (body.arrival_id != null) {
+    const a = await query(`SELECT id FROM qc.arrivals WHERE id=@a AND deleted_at IS NULL`, { a: Number(body.arrival_id) })
+    if (!a.recordset?.length) throw appError(400, 'arrival_id inválido')
+    arrivalId = a.recordset[0].id
+  }
+
+  // Reinspección: enlaza con la inspección original (prevalece la más reciente)
+  let reinspectionOf = null
+  if (body.reinspection_of != null) {
+    const o = await query(`SELECT id FROM qc.inspections WHERE id=@o AND deleted_at IS NULL`, { o: Number(body.reinspection_of) })
+    if (!o.recordset?.length) throw appError(400, 'reinspection_of inválido')
+    reinspectionOf = o.recordset[0].id
+  }
   const metrics = (body.metrics && typeof body.metrics === 'object') ? body.metrics : {}
   const photos = (body.photos && typeof body.photos === 'object') ? body.photos : {}
   const unknownKeys = []
@@ -98,15 +114,16 @@ export async function createInspection(user, body) {
       tw: num(body.temp_water), ta: num(body.temp_ambient), tp: num(body.temp_pulp),
       nw: num(body.net_weight) > 0 ? num(body.net_weight) : null,
       fMin: num(body.baxlo_min), fMode: num(body.baxlo_mode), fMax: num(body.baxlo_max),
+      arrival: arrivalId, reinsp: reinspectionOf,
       notes: body.notes ? String(body.notes) : null
     }).query(
       `INSERT INTO qc.inspections
         (pallet_id, assignment_id, commodity_id, template_id, template_version, standard_id,
          created_by_user_id, brix_avg, brix_min, brix_max, brix_mode, diameter_min, diameter_max,
          temp_water, temp_ambient, temp_pulp, net_weight,
-         firmness_min, firmness_mode, firmness_max, notes)
+         firmness_min, firmness_mode, firmness_max, arrival_id, reinspection_of, notes)
        OUTPUT INSERTED.id
-       VALUES (@pallet, @assignment, @cid, @tpl, @tver, @std, @uid, @brix, @brixMin, @brixMax, @brixMode, @diaMin, @diaMax, @tw, @ta, @tp, @nw, @fMin, @fMode, @fMax, @notes)`)
+       VALUES (@pallet, @assignment, @cid, @tpl, @tver, @std, @uid, @brix, @brixMin, @brixMax, @brixMode, @diaMin, @diaMax, @tw, @ta, @tp, @nw, @fMin, @fMode, @fMax, @arrival, @reinsp, @notes)`)
     const inspectionId = ins.recordset[0].id
 
     // Mediciones (traducir JSON plano -> filas tipadas)
