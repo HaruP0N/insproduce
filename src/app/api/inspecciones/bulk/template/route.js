@@ -23,7 +23,7 @@ export async function GET(req) {
     const { commodity, fields } = await getTemplateFieldsByCommodityCode(code)
 
     const wb = new ExcelJS.Workbook()
-    wb.creator = 'Insproduce QC'
+    wb.creator = 'Fruitbrix Field'
     const ws = wb.addWorksheet(lang === 'en' ? 'Inspections' : 'Inspecciones', {
       views: [{ state: 'frozen', ySplit: 1 }],
     })

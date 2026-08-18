@@ -306,7 +306,7 @@ export async function generateInspectionPDF(report) {
 function pageHeader(doc, title, fill, text, font) {
   fill('#15803d'); doc.rect(0, 0, PAGE_W, 14, 'F')
   text('#ffffff'); font('bold', 12); doc.text(title, M, 9.5)
-  font('normal', 8); text('#d7f0df'); doc.text('Insproduce QC', PAGE_W - M, 9.5, { align: 'right' })
+  font('normal', 8); text('#d7f0df'); doc.text('Fruitbrix Field', PAGE_W - M, 9.5, { align: 'right' })
 }
 
 function footer(doc, insp, fill, stroke, text, font) {

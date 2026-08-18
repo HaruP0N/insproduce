@@ -7,8 +7,14 @@ const ibmSans = IBM_Plex_Sans({ variable: "--font-ibm-sans", subsets: ["latin"],
 const ibmMono = IBM_Plex_Mono({ variable: "--font-ibm-mono", subsets: ["latin"], weight: ["400", "500", "600"] });
 
 export const metadata = {
-  title: "Insproduce QC — Control de calidad",
-  description: "Plataforma de control de calidad frutícola",
+  title: "Fruitbrix Field — Control de calidad",
+  description: "Captura y gestión de inspecciones de calidad frutícola",
+  openGraph: {
+    title: "Fruitbrix Field",
+    description: "Captura y gestión de inspecciones de calidad frutícola",
+    siteName: "Fruitbrix",
+    type: "website",
+  },
 };
 
 // Sin esto, los navegadores móviles renderizan a ~980px y escalan (todo se ve en miniatura)

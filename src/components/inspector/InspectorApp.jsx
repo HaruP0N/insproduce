@@ -36,7 +36,7 @@ function InspTopBar({ tab, onTab, assignedCount, user, theme, onTheme, onLogout 
       <div className="insp-brand">
         <div className="brand-logo"><Icon name="grape" size={20} stroke={1.9} /></div>
         <div>
-          <div className="brand-name">Insproduce</div>
+          <div className="brand-name">Fruitbrix</div>
           <div className="brand-sub">{t('ins.fieldInspection')}</div>
         </div>
       </div>

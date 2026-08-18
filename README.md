@@ -1,36 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Fruitbrix Field — captura y gestión de inspecciones QC
 
-## Getting Started
+App operativa del control de calidad frutícola (Family Tree Farms / berries). Los
+inspectores capturan inspecciones en terreno desde el celular (métricas por plantilla,
+fotos a Cloudinary) y el admin gestiona asignaciones, arribos por contenedor, tolerancias
+y reportes PDF. Es la plataforma hermana de **Fruitbrix Sentry**, que consolida los Excel
+y vigila las alertas post-cosecha.
 
-First, run the development server:
+Next.js 16 (App Router) + React 19 + Azure SQL (esquema `qc`).
+
+## Correr en local
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev            # http://localhost:3000
+npm run build          # verificación principal (no hay suite de tests)
+node db/run-migrations.mjs fruticola_2026   # aplica db/migrations/*.sql (idempotente)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Credenciales de desarrollo en `db/seed-users.mjs`. Las variables van en `.env.local`
+(ver `.env.example`): `DB_*`, `JWT_SECRET` (obligatoria), `CLOUDINARY_*` y, opcionalmente,
+las de Google Sheets.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## Qué incluye
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Inspector** (móvil): cola de asignadas → captura guiada por plantilla → completadas.
+- **Admin**: dashboard, inspecciones, carga masiva desde Excel, arribos por contenedor,
+  asignaciones, lotes, reportes, commodities, tolerancias, plantillas, usuarios.
+- **Motor de score**: bandas por defecto y por sumas de familia; resolución
+  `approved / conditional / rejected` según el estándar elegido (FTF Destino, QIMA,
+  Origen RR/FTF/Premium, Destino FTF v1.2).
+- **PDF de inspección** con KPIs, distribución de bandas, notas automáticas y fotos.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Despliegue en Vercel + Azure SQL: ver [DEPLOY.md](DEPLOY.md).

@@ -113,10 +113,10 @@ export default function PortalLogin() {
     <div className="portal">
       <header className="portal-top">
         <div className="portal-brand">
-          <div className="mark"><img src="/logo-mark.png" alt="Insproduce" /></div>
+          <div className="mark"><img src="/logo-mark.png" alt="Fruitbrix" /></div>
           <div>
-            <div className="brand-name">Insproduce</div>
-            <div className="brand-sub">Quality Control</div>
+            <div className="brand-name">Fruitbrix</div>
+            <div className="brand-sub">Field</div>
           </div>
         </div>
         <div className="right">

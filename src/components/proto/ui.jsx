@@ -33,8 +33,8 @@ export function Sidebar({ route, onNav, pendingCount, user, onLogout }) {
       <div className="brand">
         <div className="brand-logo"><Icon name="grape" size={21} stroke={1.9} /></div>
         <div>
-          <div className="brand-name">Insproduce</div>
-          <div className="brand-sub">Quality Control</div>
+          <div className="brand-name">Fruitbrix</div>
+          <div className="brand-sub">Field</div>
         </div>
       </div>
       <nav className="nav">
