@@ -132,6 +132,10 @@ export default function PortalLogin() {
       {/* Móvil/tablet: una sola tarjeta con switch Admin/Inspector (inspector por defecto:
           es quien trabaja desde el celular en terreno). Visible solo ≤860px vía CSS. */}
       <main className="portal-mobile">
+        {/* Fondo según el rol elegido (crossfade entre las dos fotos del portal) */}
+        <div className="pm-bg" style={{ backgroundImage: "url('/bg-ops.jpg')", opacity: state === 'admin' ? 0 : 0.5 }} />
+        <div className="pm-bg" style={{ backgroundImage: "url('/bg-admin.jpg')", opacity: state === 'admin' ? 0.5 : 0 }} />
+        <div className="pm-tint" />
         <div className="pm-card">
           <div className="pm-seg" role="tablist">
             <button type="button" className={state !== 'admin' ? 'on' : ''} onClick={() => open('ops')}>
