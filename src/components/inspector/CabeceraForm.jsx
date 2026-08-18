@@ -117,7 +117,7 @@ export default function CabeceraForm({ header, headerPhotos, onHeader, onHeaderP
             <div style={{ fontSize: 11, fontWeight: 900, color: '#374151', textTransform: 'uppercase', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 5 }}>
               <Package size={11} color="#6b7280" /> {label}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${campos.length}, 1fr)`, gap: 10, marginBottom: foto ? 12 : 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10, marginBottom: foto ? 12 : 0 }}>
               {campos.map(([k, sublabel]) => (
                 <div key={k}>
                   <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: '#6b7280', marginBottom: 5, textTransform: 'uppercase' }}>

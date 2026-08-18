@@ -11,6 +11,9 @@ export const metadata = {
   description: "Plataforma de control de calidad frutícola",
 };
 
+// Sin esto, los navegadores móviles renderizan a ~980px y escalan (todo se ve en miniatura)
+export const viewport = { width: "device-width", initialScale: 1 };
+
 const themeInit = `try{document.documentElement.dataset.theme=localStorage.getItem('insp-theme')||'light'}catch(e){document.documentElement.dataset.theme='light'}`;
 
 export default function RootLayout({ children }) {

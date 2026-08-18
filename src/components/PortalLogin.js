@@ -128,6 +128,38 @@ export default function PortalLogin() {
         {renderPanel('admin', 'portal.admin', 'dashboard')}
         {renderPanel('ops', 'portal.ops', 'clipboardCheck')}
       </main>
+
+      {/* Móvil/tablet: una sola tarjeta con switch Admin/Inspector (inspector por defecto:
+          es quien trabaja desde el celular en terreno). Visible solo ≤860px vía CSS. */}
+      <main className="portal-mobile">
+        <div className="pm-card">
+          <div className="pm-seg" role="tablist">
+            <button type="button" className={state !== 'admin' ? 'on' : ''} onClick={() => open('ops')}>
+              <Icon name="clipboardCheck" size={15} /> {t('portal.ops.badge')}
+            </button>
+            <button type="button" className={state === 'admin' ? 'on' : ''} onClick={() => open('admin')}>
+              <Icon name="dashboard" size={15} /> {t('portal.admin.badge')}
+            </button>
+          </div>
+          <form onSubmit={handleLogin} autoComplete="on" noValidate>
+            <div className="field">
+              <label className="field-label">{t('login.email')}</label>
+              <input className="input" type="email" name="email"
+                placeholder={state === 'admin' ? 'nombre@insproduce.cl' : 'inspector@insproduce.cl'}
+                autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} />
+            </div>
+            <div className="field">
+              <label className="field-label">{t('login.password')}</label>
+              <input className="input" type="password" name="password" placeholder="••••••••"
+                autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} />
+            </div>
+            {error && <div style={{ fontSize: 12.5, color: 'var(--red)', marginBottom: 10 }}>{error}</div>}
+            <button className="btn btn-primary btn-submit" type="submit" disabled={loading} style={{ width: '100%' }}>
+              {loading ? t('login.signingIn') : t('login.signIn')}
+            </button>
+          </form>
+        </div>
+      </main>
     </div>
   )
 }

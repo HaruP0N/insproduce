@@ -592,3 +592,82 @@ tr:hover .row-actions { opacity: 1; }
   .stage[data-state="admin"] .panel.admin .login, .stage[data-state="ops"] .panel.ops .login { transform: translateY(0) scale(1); }
   .stage[data-state="admin"] .panel.admin .pcontent, .stage[data-state="ops"] .panel.ops .pcontent { display: none; }
 }
+
+/* ══════════════ RESPONSIVE — admin en tablet y móvil ══════════════ */
+
+/* Tablet (≤1024px): sidebar como riel de íconos */
+@media (max-width: 1024px) {
+  .app { grid-template-columns: 62px 1fr; }
+  .sidebar .brand { padding: 14px 0 10px; justify-content: center; }
+  .sidebar .brand > div:not(.brand-logo) { display: none; }
+  .nav-group-label { display: none; }
+  .sidebar .nav-item { position: relative; justify-content: center; padding: 12px 0; }
+  .sidebar .nav-item > span { display: none; }
+  .sidebar .nav-item .nav-badge { position: absolute; top: 5px; right: 7px; }
+  .side-foot { padding: 8px 5px; }
+  .user-chip { justify-content: center; padding: 9px 0; }
+  .user-chip > div:not(.avatar) { display: none; }
+  .user-chip > svg { display: none; }
+}
+
+/* Móvil (≤700px) */
+@media (max-width: 700px) {
+  .topbar { padding: 11px 12px; gap: 10px; }
+  .page-title { font-size: 16.5px; }
+  .page-sub { display: none; }
+  .topbar .search { display: none; }
+  .topbar .btn-primary { padding: 8px 12px; font-size: 12.5px; white-space: nowrap; }
+  .content { padding: 13px 11px 44px; }
+  .content-inner { max-width: 100%; }
+  .grid { gap: 11px; }
+  .kpi-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+
+  /* Tablas: scroll horizontal contenido dentro de la card */
+  .card-pad { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tbl { min-width: 560px; }
+
+  /* Modales casi a pantalla completa */
+  .modal, .modal.lg { max-width: calc(100vw - 14px); max-height: 94vh; }
+  .modal-body { padding: 14px; }
+
+  .crud-toolbar { flex-wrap: wrap; gap: 8px; }
+  .seg { flex-wrap: wrap; }
+  .content-inner .search { width: 100%; }
+}
+
+@media (max-width: 420px) {
+  .topbar-actions { gap: 6px; }
+  .kpi-row { grid-template-columns: 1fr 1fr; }
+  .tbl { min-width: 480px; font-size: 12.5px; }
+}
+
+/* ══════ Portal móvil: una tarjeta con switch Admin/Inspector ══════ */
+.portal-mobile { display: none; }
+@media (max-width: 860px) {
+  .stage { display: none; }
+  .portal-mobile {
+    display: flex; flex: 1; align-items: flex-start; justify-content: center;
+    padding: 30px 16px 40px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  }
+  .pm-card {
+    width: 100%; max-width: 430px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r-lg); box-shadow: var(--shadow-card);
+    padding: 22px 20px 24px;
+  }
+  .pm-seg {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--r-pill); padding: 4px; margin-bottom: 20px;
+  }
+  .pm-seg button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    border: 0; background: transparent; padding: 10px 0; border-radius: var(--r-pill);
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-dim);
+    cursor: pointer; transition: background .18s, color .18s;
+  }
+  .pm-seg button.on {
+    background: var(--accent); color: var(--on-accent);
+    box-shadow: 0 3px 10px -3px var(--accent-line);
+  }
+}
