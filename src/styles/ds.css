@@ -687,3 +687,10 @@ tr:hover .row-actions { opacity: 1; }
   .portal-mobile { position: relative; }
   .pm-card { position: relative; z-index: 2; }
 }
+
+/* Los items de grid no deben inflarse por su contenido (gráficos SVG auto-medidos) */
+.grid > * { min-width: 0; }
+@media (max-width: 700px) {
+  .topbar { flex-wrap: wrap; row-gap: 8px; }
+  .topbar-actions { flex-wrap: wrap; justify-content: flex-end; }
+}

@@ -39,7 +39,7 @@ export function Donut({ segments, size = 150, thickness = 18, centerTop, centerB
 
 export function AreaChart({ data, height = 200, accent = '--accent', yKey = 'v', xKey = 'wk', domainPad = 6 }) {
   const wrapRef = useRef(null)
-  const [w, setW] = useState(640)
+  const [w, setW] = useState(320)
   const uid = useId().replace(/:/g, '')
   const [draw, setDraw] = useState(0)
   useEffect(() => {
@@ -63,8 +63,8 @@ export function AreaChart({ data, height = 200, accent = '--accent', yKey = 'v',
   const [hover, setHover] = useState(null)
 
   return (
-    <div ref={wrapRef} style={{ width: '100%', position: 'relative' }}>
-      <svg width={w} height={height} style={{ display: 'block', overflow: 'visible' }} onMouseLeave={() => setHover(null)}>
+    <div ref={wrapRef} style={{ width: '100%', position: 'relative', overflow: 'hidden' }}>
+      <svg width={w} height={height} style={{ display: 'block', overflow: 'visible', maxWidth: '100%' }} onMouseLeave={() => setHover(null)}>
         <defs>
           <linearGradient id={'ag' + uid} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={`var(${accent})`} stopOpacity="0.28" />
