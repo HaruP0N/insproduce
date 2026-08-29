@@ -95,12 +95,14 @@ export function generateArrivalPDF({ arrival, defects, measurements }) {
   headerRows([
     ['Order', arrival.order_number], ['Grower', arrival.grower],
     ['Fumigation', arrival.fumigation ? 'Sí' : 'No'], ['Atmosphere', arrival.atmosphere],
+    ['Packing Date', fdate(arrival.packing_date)],
   ], M, gw2)
   headerRows([
     ['% O2', arrival.o2_pct], ['% CO2', arrival.co2_pct],
-    ['UPC', arrival.upc], ['Packing Date', fdate(arrival.packing_date)],
+    ['UPC', arrival.upc], ['Ship Date', fdate(arrival.ship_date)],
+    ['Season', arrival.season || '—'],
   ], M + gw2 + 4, gw2)
-  y += 4 * 6.4 + 7
+  y += 5 * 6.4 + 7
 
   const sectionBand = (label, x, w) => {
     fill(C.teal); doc.rect(x, y, w, 7, 'F')

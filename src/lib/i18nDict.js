@@ -179,6 +179,8 @@ export const DICT = {
   'arr.client': { es: 'Cliente', en: 'Client' },
   'arr.grower': { es: 'Grower', en: 'Grower' },
   'arr.destination': { es: 'Destino', en: 'Destination' },
+  'arr.shipDate': { es: 'Fecha embarque', en: 'Ship date' },
+  'arr.shippedShort': { es: 'emb.', en: 'shp.' },
   'arr.packingDate': { es: 'Fecha embalaje', en: 'Packing date' },
   'arr.inspDate': { es: 'Fecha inspección', en: 'Inspection date' },
   'arr.edit': { es: 'Editar arribo', en: 'Edit arrival' },

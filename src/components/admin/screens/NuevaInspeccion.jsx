@@ -110,6 +110,8 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
         pallet_number: ctx.prefill.pallet_number || '',
         variety: ctx.prefill.variety || '',
         packaging_type: ctx.prefill.packaging || p.packaging_type,
+        packaging_date: ctx.prefill.packaging_date ? String(ctx.prefill.packaging_date).slice(0, 10) : p.packaging_date,
+        caliber: ctx.prefill.caliber ? ctx.prefill.caliber[0].toUpperCase() + ctx.prefill.caliber.slice(1).toLowerCase() : p.caliber,
       }))
     }
     if (ctx.reinspect) {

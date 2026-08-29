@@ -17,7 +17,7 @@ const api = async (path, opts = {}) => {
 const EMPTY = {
   container: '', commodity_code: 'BLUEBERRY', warehouse: '', carrier_type: 'Marítimo',
   vessel: '', airline: '', arrival_date: '', warehouse_date: '', week_no: '', cartons: '',
-  atmosphere: '', o2_pct: '', co2_pct: '', upc: '', fumigation: false, notes: '',
+  atmosphere: '', o2_pct: '', co2_pct: '', upc: '', fumigation: false, notes: '', ship_date: '',
   order_number: '', shipper: '', packaging: '', label: '', client: '', grower: '',
   destination: '', packing_date: '', inspection_date: '',
 }
@@ -31,7 +31,11 @@ async function readManifestFile(file) {
 }
 
 const NOTE_TYPES = ['Quality & Condition', 'Temperature', 'Traceability', 'Package', 'Temperature Record']
-const DATE_KEYS = ['arrival_date', 'warehouse_date', 'packing_date', 'inspection_date']
+const DATE_KEYS = ['arrival_date', 'warehouse_date', 'packing_date', 'inspection_date', 'ship_date']
+const minRecvDate = (rows) => {
+  const ds = (rows || []).map((r) => r.recv_date).filter(Boolean).sort()
+  return ds[0] || ''
+}
 
 // Paso 1: info general del cargo (la que llega semanas antes del contenedor).
 // Paso 2 (solo al crear): precarga de pallets + asignación opcional a un inspector.
@@ -92,6 +96,10 @@ function ArriboWizard({ onClose, onSaved, onToast, edit }) {
         order_number: p.order_number || parsed.info.order_number || '',
         client: p.client || parsed.info.client || '',
         warehouse: p.warehouse || parsed.info.receiver || '',
+        ship_date: p.ship_date || parsed.info.ship_date || '',
+        // recvdate = recepción/embalaje en origen: es el Packing/Warehouse Date del reporte
+        packing_date: p.packing_date || minRecvDate(parsed.rows) || '',
+        warehouse_date: p.warehouse_date || minRecvDate(parsed.rows) || '',
         packaging: p.packaging || [...new Set(parsed.rows.map((r) => r.packaging).filter(Boolean))].join(' / '),
         cartons: p.cartons || String(parsed.rows.reduce((a, r) => a + (r.cases || 0), 0)),
       }))
@@ -206,6 +214,7 @@ function ArriboWizard({ onClose, onSaved, onToast, edit }) {
           </Field>
 
           {groupTitle(t('arr.grpDates'))}
+          <Field label={t('arr.shipDate')}>{inp('ship_date', { type: 'date' })}</Field>
           <Field label={t('arr.packingDate')}>{inp('packing_date', { type: 'date' })}</Field>
           <Field label={t('arr.arrivalDate')}>{inp('arrival_date', { type: 'date' })}</Field>
           <Field label={t('arr.warehouseDate')}>{inp('warehouse_date', { type: 'date' })}</Field>
@@ -459,6 +468,9 @@ function DetalleArribo({ id, onToast, onAddInspection, onReinspect, onBack }) {
         warehouse: data.warehouse || parsed.info.receiver || null,
         packaging: data.packaging || [...new Set(parsed.rows.map((r) => r.packaging).filter(Boolean))].join(' / ') || null,
         cartons: data.cartons || parsed.rows.reduce((a, r) => a + (r.cases || 0), 0) || null,
+        ship_date: data.ship_date || parsed.info.ship_date || null,
+        packing_date: data.packing_date || minRecvDate(parsed.rows) || null,
+        warehouse_date: data.warehouse_date || minRecvDate(parsed.rows) || null,
       }
       if (Object.entries(fill).some(([k, v]) => v && !data[k])) {
         await api(`/api/arrivals/${id}`, { method: 'PUT', body: JSON.stringify({ ...data, ...fill }) })
@@ -521,6 +533,7 @@ function DetalleArribo({ id, onToast, onAddInspection, onReinspect, onBack }) {
     [t('arr.client'), data.client], [t('arr.destination'), data.destination],
     [t('arr.vessel'), data.vessel], [t('arr.airline'), data.airline],
     [t('arr.carrier'), data.carrier_type], [t('arr.labelField'), data.label],
+    [t('arr.shipDate'), fmtDate(data.ship_date)],
     [t('arr.packingDate'), fmtDate(data.packing_date)], [t('arr.arrivalDate'), fmtDate(data.arrival_date)],
     [t('arr.inspDate'), fmtDate(data.inspection_date)], [t('arr.week'), data.week_no],
     [t('arr.atmosphere'), data.atmosphere], ['UPC', data.upc],
@@ -560,6 +573,10 @@ function DetalleArribo({ id, onToast, onAddInspection, onReinspect, onBack }) {
         onInspect={(g) => onAddInspection(data, {
           producer: g.growers.join(' + '), lot: g.lot || '', pallet_number: g.pallet,
           variety: g.varieties.join(' / '), packaging: g.parts[0]?.packaging || '',
+          // recvdate del manifiesto = fecha de empaque/recepción en origen
+          packaging_date: (g.dates || []).slice().sort()[0] || '',
+          // el calibre viene dentro del packaging: "12/Pint Large #1" → Large
+          caliber: ((g.parts[0]?.packaging || '').match(/jumbo|large|regular|small|petite/i)?.[0] || ''),
         })} />
 
       <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', margin: '18px 0 8px' }}>
@@ -716,7 +733,10 @@ export default function ArribosScreen({ onToast, onAddInspection, onReinspect })
                   <tr key={a.id} onClick={() => setOpenId(a.id)} style={{ cursor: 'pointer' }}>
                     <td><div className="cell-strong mono" style={{ fontSize: 12.5 }}>{a.container}</div><div className="cell-dim">{a.commodity_code ? commodityVisual(a.commodity_code, t).label : ''}</div></td>
                     <td>{a.warehouse || '—'}</td>
-                    <td className="mono" style={{ color: 'var(--text-dim)' }}>{fmtDate(a.arrival_date)}</td>
+                    <td className="mono" style={{ color: 'var(--text-dim)' }}>
+                      {a.arrival_date ? fmtDate(a.arrival_date)
+                        : a.ship_date ? <span style={{ color: 'var(--text-faint)' }}>{t('arr.shippedShort')} {fmtDate(a.ship_date)}</span> : '—'}
+                    </td>
                     <td className="num">{a.week_no ?? '—'}</td>
                     <td className="num">
                       {a.manifest_pallets > 0 ? `${a.pallets}/${a.manifest_pallets}` : a.pallets}

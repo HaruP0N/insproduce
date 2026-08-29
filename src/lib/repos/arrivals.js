@@ -9,7 +9,7 @@ const num = (v) => {
 
 export async function listArrivals() {
   const r = await query(
-    `SELECT a.id, a.container, a.warehouse, a.carrier_type, a.arrival_date, a.week_no,
+    `SELECT a.id, a.container, a.warehouse, a.carrier_type, a.arrival_date, a.ship_date, a.week_no,
             a.cartons, a.created_at, c.code AS commodity_code, c.name AS commodity_name,
             (SELECT COUNT(*) FROM qc.inspections i WHERE i.arrival_id=a.id AND i.deleted_at IS NULL) AS pallets,
             (SELECT COUNT(DISTINCT m.pallet_code) FROM qc.arrival_manifest m WHERE m.arrival_id=a.id) AS manifest_pallets,
@@ -43,11 +43,11 @@ export async function createArrival(body, userId) {
     `INSERT INTO qc.arrivals
        (container, commodity_id, warehouse, carrier_type, vessel, arrival_date, warehouse_date,
         week_no, cartons, atmosphere, o2_pct, co2_pct, upc, fumigation, notes, created_by_user_id,
-        order_number, shipper, packaging, airline, label, client, grower, destination, packing_date, inspection_date)
+        order_number, shipper, packaging, airline, label, client, grower, destination, packing_date, inspection_date, ship_date)
      OUTPUT INSERTED.id
      VALUES (@container, @cid, @wh, @carrier, @vessel, @adate, @wdate, @week, @cartons,
              @atm, @o2, @co2, @upc, @fum, @notes, @uid,
-             @order_n, @shipper, @packaging, @airline, @label, @client, @grower, @destination, @pdate, @idate)`,
+             @order_n, @shipper, @packaging, @airline, @label, @client, @grower, @destination, @pdate, @idate, @sdate)`,
     {
       container, cid: commodityId,
       wh: body.warehouse || null, carrier: body.carrier_type || null, vessel: body.vessel || null,
@@ -60,6 +60,7 @@ export async function createArrival(body, userId) {
       airline: body.airline || null, label: body.label || null, client: body.client || null,
       grower: body.grower || null, destination: body.destination || null,
       pdate: body.packing_date || null, idate: body.inspection_date || null,
+      sdate: body.ship_date || null,
     })
   return r.recordset[0].id
 }
@@ -81,7 +82,7 @@ export async function updateArrival(id, body) {
        arrival_date=@adate, warehouse_date=@wdate, week_no=@week, cartons=@cartons,
        atmosphere=@atm, o2_pct=@o2, co2_pct=@co2, upc=@upc, fumigation=@fum, notes=@notes,
        order_number=@order_n, shipper=@shipper, packaging=@packaging, airline=@airline, label=@label,
-       client=@client, grower=@grower, destination=@destination, packing_date=@pdate, inspection_date=@idate
+       client=@client, grower=@grower, destination=@destination, packing_date=@pdate, inspection_date=@idate, ship_date=@sdate
      WHERE id=@id AND deleted_at IS NULL;
      SELECT @@ROWCOUNT AS n`,
     {
@@ -95,6 +96,7 @@ export async function updateArrival(id, body) {
       airline: body.airline || null, label: body.label || null, client: body.client || null,
       grower: body.grower || null, destination: body.destination || null,
       pdate: body.packing_date || null, idate: body.inspection_date || null,
+      sdate: body.ship_date || null,
     })
   if (!r.recordset?.[0]?.n) throw appError(404, 'Arribo no encontrado')
 }
