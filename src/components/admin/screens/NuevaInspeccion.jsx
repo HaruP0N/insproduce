@@ -65,6 +65,17 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
   useEffect(() => {
     if (!ctx) return
     if (ctx.arrival?.commodity_code) setCode(ctx.arrival.commodity_code)
+    // pallet elegido desde el manifiesto del contenedor: cabecera prellenada
+    if (ctx.prefill) {
+      setHeader((p) => ({
+        ...p,
+        producer: ctx.prefill.producer || '',
+        lot: ctx.prefill.lot || '',
+        pallet_number: ctx.prefill.pallet_number || '',
+        variety: ctx.prefill.variety || '',
+        packaging_type: ctx.prefill.packaging || p.packaging_type,
+      }))
+    }
     if (ctx.reinspect) {
       setHeader((p) => ({
         ...p,

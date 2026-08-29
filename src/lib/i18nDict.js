@@ -196,6 +196,7 @@ export const DICT = {
   'arr.growersCol': { es: 'Growers', en: 'Growers' },
   'arr.recvDate': { es: 'Recepción', en: 'Received' },
   'arr.assign': { es: 'Asignar', en: 'Assign' },
+  'arr.inspect': { es: 'Inspeccionar', en: 'Inspect' },
   'arr.assigned': { es: 'Asignado', en: 'Assigned' },
   'arr.combinedHint': { es: 'Pallet compartido (combinado) en el manifiesto', en: 'Shared (combined) pallet in the manifest' },
   'arr.inspectionsTitle': { es: 'Inspecciones realizadas', en: 'Completed inspections' },

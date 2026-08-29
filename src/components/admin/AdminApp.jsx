@@ -90,7 +90,7 @@ export default function AdminApp() {
   else if (route === 'tolerancias') screen = <ToleranciasScreen onToast={showToast} />
   else if (route === 'carga') screen = <CargaMasivaScreen onToast={showToast} onDone={reloadData} />
   else if (route === 'arribos') screen = <ArribosScreen onToast={showToast}
-    onAddInspection={(a) => { setInspCtx({ arrival: a }); navigate('nueva') }}
+    onAddInspection={(a, prefill = null) => { setInspCtx({ arrival: a, prefill }); navigate('nueva') }}
     onReinspect={(a, i) => { setInspCtx({ arrival: a, reinspect: i }); navigate('nueva') }} />
   else if (route === 'nueva') screen = <NuevaInspeccionScreen onToast={showToast} ctx={inspCtx}
     onCancel={() => { setInspCtx(null); navigate(inspCtx?.arrival ? 'arribos' : 'inspecciones') }}

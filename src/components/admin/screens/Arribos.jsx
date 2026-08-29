@@ -248,7 +248,7 @@ function ArriboWizard({ onClose, onSaved, onToast, edit }) {
 
 // Pallets del contenedor agrupados desde el manifiesto: dropdown por pallet con su
 // composición (un pallet puede venir de varios growers/fechas — badge MIXTO).
-function ManifestSection({ data, t, lang, openPallets, setOpenPallets, inspectores, assignEmail, setAssignEmail, assigning, onAssign, onUpload }) {
+function ManifestSection({ data, t, lang, openPallets, setOpenPallets, inspectores, assignEmail, setAssignEmail, assigning, onAssign, onUpload, onInspect }) {
   const groups = groupManifest(data.manifest || [])
   const inspByPallet = new Map((data.inspections || []).map((i) => [i.pallet_code, i]))
   const pendingByPallet = new Map((data.pending_assignments || []).map((a) => [a.pallet_number, a]))
@@ -312,10 +312,17 @@ function ManifestSection({ data, t, lang, openPallets, setOpenPallets, inspector
                           : <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>—</span>}
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
-                      {!done && !pend && (
-                        <button className="btn btn-sm" disabled={assigning === g.pallet} onClick={() => onAssign(g)}>
-                          {assigning === g.pallet ? '…' : t('arr.assign')}
-                        </button>
+                      {!done && (
+                        <span style={{ display: 'inline-flex', gap: 6 }}>
+                          <button className="btn btn-sm btn-primary" onClick={() => onInspect(g)}>
+                            <Icon name="clipboardCheck" size={13} /> {t('arr.inspect')}
+                          </button>
+                          {!pend && (
+                            <button className="btn btn-sm" disabled={assigning === g.pallet} onClick={() => onAssign(g)}>
+                              {assigning === g.pallet ? '…' : t('arr.assign')}
+                            </button>
+                          )}
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -511,7 +518,11 @@ function DetalleArribo({ id, onToast, onAddInspection, onReinspect, onBack }) {
 
       <ManifestSection data={data} t={t} lang={lang} openPallets={openPallets} setOpenPallets={setOpenPallets}
         inspectores={inspectores} assignEmail={assignEmail} setAssignEmail={setAssignEmail}
-        assigning={assigning} onAssign={assignPallet} onUpload={uploadManifest} />
+        assigning={assigning} onAssign={assignPallet} onUpload={uploadManifest}
+        onInspect={(g) => onAddInspection(data, {
+          producer: g.growers.join(' + '), lot: g.lot || '', pallet_number: g.pallet,
+          variety: g.varieties.join(' / '), packaging: g.parts[0]?.packaging || '',
+        })} />
 
       <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', margin: '18px 0 8px' }}>
         {t('arr.inspectionsTitle')} ({data.inspections.length})
