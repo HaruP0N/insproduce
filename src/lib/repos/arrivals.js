@@ -12,6 +12,7 @@ export async function listArrivals() {
     `SELECT a.id, a.container, a.warehouse, a.carrier_type, a.arrival_date, a.week_no,
             a.cartons, a.created_at, c.code AS commodity_code, c.name AS commodity_name,
             (SELECT COUNT(*) FROM qc.inspections i WHERE i.arrival_id=a.id AND i.deleted_at IS NULL) AS pallets,
+            (SELECT COUNT(DISTINCT m.pallet_code) FROM qc.arrival_manifest m WHERE m.arrival_id=a.id) AS manifest_pallets,
             (SELECT AVG(CAST(r2.score AS FLOAT)) FROM qc.inspections i JOIN qc.inspection_results r2 ON r2.inspection_id=i.id
              WHERE i.arrival_id=a.id AND i.deleted_at IS NULL) AS avg_score,
             (SELECT COUNT(*) FROM qc.inspections i JOIN qc.inspection_results r2 ON r2.inspection_id=i.id

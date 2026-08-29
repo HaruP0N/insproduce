@@ -55,7 +55,16 @@ function ArriboWizard({ onClose, onSaved, onToast, edit }) {
   const [inspectores, setInspectores] = useState([])
   const [manifest, setManifest] = useState(null) // { info, rows } parseado del Excel
   const [busy, setBusy] = useState(false)
-  const set = (k, v) => setForm((p) => ({ ...p, [k]: v }))
+  const set = (k, v) => setForm((p) => {
+    const next = { ...p, [k]: v }
+    // semana automática desde la fecha de arribo (editable después)
+    if (k === 'arrival_date' && v && !p.week_no) {
+      const d = new Date(v + 'T00:00:00Z')
+      const jan1 = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+      next.week_no = String(Math.ceil(((d - jan1) / 86400000 + jan1.getUTCDay() + 1) / 7))
+    }
+    return next
+  })
   const setRow = (i, k, v) => setRows((p) => p.map((r, j) => (j === i ? { ...r, [k]: v } : r)))
 
   useEffect(() => {
@@ -82,10 +91,14 @@ function ArriboWizard({ onClose, onSaved, onToast, edit }) {
         container: p.container || parsed.info.container || '',
         order_number: p.order_number || parsed.info.order_number || '',
         client: p.client || parsed.info.client || '',
+        warehouse: p.warehouse || parsed.info.receiver || '',
         packaging: p.packaging || [...new Set(parsed.rows.map((r) => r.packaging).filter(Boolean))].join(' / '),
         cartons: p.cartons || String(parsed.rows.reduce((a, r) => a + (r.cases || 0), 0)),
       }))
-      onToast({ title: t('arr.manifestImported', { p: groups.length, n: parsed.rows.length }) })
+      const extras = []
+      if (parsed.info.temp_recorders?.length) extras.push(`Temp recorders: ${parsed.info.temp_recorders.join(', ')}`)
+      if (parsed.warnings?.length) extras.push(...parsed.warnings)
+      onToast({ title: t('arr.manifestImported', { p: groups.length, n: parsed.rows.length }), sub: extras.join(' · ') || undefined })
     } catch (e) {
       onToast({ title: t('arr.manifestErr'), sub: e.message, bad: true })
     }
@@ -105,6 +118,13 @@ function ArriboWizard({ onClose, onSaved, onToast, edit }) {
         arrivalId = d.id
         if (manifest?.rows?.length) {
           await api(`/api/arrivals/${arrivalId}/manifest`, { method: 'PUT', body: JSON.stringify({ rows: manifest.rows }) })
+          // lectores de temperatura del Excel → nota "Temperature Record" del reporte
+          if (manifest.info?.temp_recorders?.length) {
+            await api(`/api/arrivals/${arrivalId}/notes`, {
+              method: 'PUT',
+              body: JSON.stringify({ notes: [{ type: 'Temperature Record', note: manifest.info.temp_recorders.map((r, i) => `Temp Recorder #${i + 1}: ${r}`).join(' · ') }] }),
+            }).catch(() => {})
+          }
         }
         // precarga: una asignación pendiente por pallet (el inspector la ve con todo prellenado)
         for (const r of filledRows) {
@@ -432,7 +452,25 @@ function DetalleArribo({ id, onToast, onAddInspection, onReinspect, onBack }) {
       const parsed = await readManifestFile(file)
       if (parsed.errors.length) return onToast({ title: t('arr.manifestErr'), sub: parsed.errors[0], bad: true })
       await api(`/api/arrivals/${id}/manifest`, { method: 'PUT', body: JSON.stringify({ rows: parsed.rows }) })
-      onToast({ title: t('arr.manifestSaved', { n: parsed.rows.length }) })
+      // backfill: completa los campos del arribo que sigan vacíos con la info del Excel
+      const fill = {
+        order_number: data.order_number || parsed.info.order_number || null,
+        client: data.client || parsed.info.client || null,
+        warehouse: data.warehouse || parsed.info.receiver || null,
+        packaging: data.packaging || [...new Set(parsed.rows.map((r) => r.packaging).filter(Boolean))].join(' / ') || null,
+        cartons: data.cartons || parsed.rows.reduce((a, r) => a + (r.cases || 0), 0) || null,
+      }
+      if (Object.entries(fill).some(([k, v]) => v && !data[k])) {
+        await api(`/api/arrivals/${id}`, { method: 'PUT', body: JSON.stringify({ ...data, ...fill }) })
+      }
+      const hasTempNote = (data.notes_typed || []).some((n) => n.note_type === 'Temperature Record' && n.note)
+      if (parsed.info.temp_recorders?.length && !hasTempNote) {
+        await api(`/api/arrivals/${id}/notes`, {
+          method: 'PUT',
+          body: JSON.stringify({ notes: [{ type: 'Temperature Record', note: parsed.info.temp_recorders.map((r, i) => `Temp Recorder #${i + 1}: ${r}`).join(' · ') }] }),
+        }).catch(() => {})
+      }
+      onToast({ title: t('arr.manifestSaved', { n: parsed.rows.length }), sub: parsed.warnings?.join(' · ') || undefined })
       load()
     } catch (e) {
       onToast({ title: t('arr.manifestErr'), sub: e.message, bad: true })
@@ -681,7 +719,7 @@ export default function ArribosScreen({ onToast, onAddInspection, onReinspect })
                     <td className="mono" style={{ color: 'var(--text-dim)' }}>{fmtDate(a.arrival_date)}</td>
                     <td className="num">{a.week_no ?? '—'}</td>
                     <td className="num">
-                      {a.pallets}
+                      {a.manifest_pallets > 0 ? `${a.pallets}/${a.manifest_pallets}` : a.pallets}
                       {(a.rejected > 0 || a.conditional > 0) && (
                         <span style={{ fontSize: 11, color: a.rejected ? 'var(--red)' : 'var(--amber, #b45309)', marginLeft: 5, fontWeight: 700 }}>
                           {a.rejected ? `${a.rejected}✗` : ''}{a.conditional ? ` ${a.conditional}!` : ''}
