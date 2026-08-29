@@ -8,6 +8,7 @@ import { Donut } from '@/components/proto/charts'
 import { StatusBadge, ScoreCell } from '@/components/proto/ui'
 import { RES, RES_VAR, fmt1, fechaCorta } from '@/lib/proto'
 import { useI18n, LangToggle } from '@/lib/i18n'
+import { PHOTO_SET, photoSetKey } from '@/lib/photoSet'
 import { uploadToCloudinary, compressImage } from '@/lib/cloudinary'
 import {
   getAssigned, getCompleted, getDetail, getCommodities, getTemplate,
@@ -384,7 +385,7 @@ const EMPTY_HEADER = {
 }
 
 function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const c = commodityVisual(task.commodity_code, t)
   const [fields, setFields] = useState([])
   const [loadingTpl, setLoadingTpl] = useState(true)
@@ -613,7 +614,28 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
             )}
           </SectionCard>
 
-          <SectionCard n="4" icon="edit" title={t('cap.s4')} sub={t('cap.s4sub')}>
+          <SectionCard n="4" icon="camera" title={`${t('cap.photoSet')} · ${PHOTO_SET.filter((p) => (photos[photoSetKey(p.tag)] || []).length > 0).length}/18`} sub={t('cap.photoSetSub')}>
+            {['general', 'variety'].map((g) => (
+              <div key={g} style={{ marginBottom: g === 'general' ? 14 : 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 8 }}>
+                  {g === 'general' ? t('ni.photoSetGeneral') : t('ni.photoSetVariety')}
+                </div>
+                <div className="form-grid">
+                  {PHOTO_SET.filter((p) => p.group === g).map((p) => (
+                    <div key={p.tag}>
+                      <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 17, height: 17, borderRadius: '50%', background: (photos[photoSetKey(p.tag)] || []).length ? 'var(--accent-strong)' : 'var(--surface-2, rgba(0,0,0,.08))', color: (photos[photoSetKey(p.tag)] || []).length ? '#fff' : 'var(--text-faint)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, flexShrink: 0 }}>{p.n}</span>
+                        {lang === 'en' ? p.en : p.es}
+                      </label>
+                      <PhotoField fieldKey={photoSetKey(p.tag)} urls={photos[photoSetKey(p.tag)] || []} onChange={(u) => setP(photoSetKey(p.tag), u)} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </SectionCard>
+
+          <SectionCard n="5" icon="edit" title={t('cap.s4')} sub={t('cap.s4sub')}>
             <textarea className="textarea" rows={3} placeholder={t('cap.notesPh')} value={header.notes} onChange={e => setH('notes', e.target.value)} />
           </SectionCard>
         </div>

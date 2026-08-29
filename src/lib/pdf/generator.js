@@ -1,6 +1,7 @@
 // Generador de PDF "estilo Power BI" (inglés). Gráficos vectoriales dibujados en jsPDF.
 // Página 1: resumen ejecutivo visual. Páginas 2-3: detalle de datos. Última: fotos.
 import { jsPDF } from 'jspdf'
+import { PHOTO_SET } from '@/lib/photoSet'
 import fetch from 'node-fetch'
 import { isAllowedPhotoUrl } from '@/lib/security/photoUrls'
 
@@ -275,7 +276,9 @@ export async function generateInspectionPDF(report) {
     }
   }
   // ═══════════════ PÁGINA 3 — PHOTO EVIDENCE ═══════════════
+  const setOrder = new Map(PHOTO_SET.map((p) => [`header.${p.tag}`, p.n]))
   const photoEntries = Object.entries(r.photos || {}).filter(([, u]) => u?.length)
+    .sort((a, b) => (setOrder.get(a[0]) ?? 99) - (setOrder.get(b[0]) ?? 99))
   if (photoEntries.length) {
     doc.addPage()
     pageHeader(doc, 'Photo evidence', fill, text, font)
@@ -292,7 +295,8 @@ export async function generateInspectionPDF(report) {
         } catch { placeholder(doc, x, ph, imgW, imgH, fill, stroke, text, font) }
         font('normal', 7); text(C.muted)
         // Caption con trazabilidad: defecto · lote · variedad (para disputas con el recibidor)
-        const what = key.startsWith('header.') ? cap(key.replace('header.', '')) + ' (header)' : cap(key)
+        const setItem = key.startsWith('header.') ? PHOTO_SET.find((p) => `header.${p.tag}` === key) : null
+        const what = setItem ? `${setItem.n}. ${setItem.en}` : key.startsWith('header.') ? cap(key.replace('header.', '')) : cap(key)
         const trace = [insp.lot, insp.variety].filter(Boolean).join(' · ')
         const label = trace ? `${what} · ${trace}` : what
         doc.text(label.slice(0, 40), x, ph + imgH + 4)

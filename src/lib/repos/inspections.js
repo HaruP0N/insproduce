@@ -157,15 +157,18 @@ export async function createInspection(user, body) {
       }
     }
 
-    // Fotos (allowlist anti-SSRF; metricKey -> defect)
+    // Fotos (allowlist anti-SSRF). 'header.<tag>' = set de fotos oficial FTF;
+    // el resto se asocia al defecto de la métrica.
     for (const [metricKey, urls] of Object.entries(photos)) {
       if (!Array.isArray(urls)) continue
-      const d = defectMap.get(metricKey)
+      const isHeader = metricKey.startsWith('header.')
+      const headerTag = isHeader ? metricKey.slice(7, 37) : null
+      const d = isHeader ? null : defectMap.get(metricKey)
       for (const url of urls) {
         if (!isAllowedPhotoUrl(url)) { skippedPhotos++; continue }
-        await txRequest(tx, { iid: inspectionId, did: d?.id ?? null, url: String(url) }).query(
-          `INSERT INTO qc.inspection_photos (inspection_id, defect_id, photo_kind, url)
-           VALUES (@iid, @did, 'defect', @url)`)
+        await txRequest(tx, { iid: inspectionId, did: d?.id ?? null, kind: isHeader ? 'header' : 'defect', tag: headerTag, url: String(url) }).query(
+          `INSERT INTO qc.inspection_photos (inspection_id, defect_id, photo_kind, header_tag, url)
+           VALUES (@iid, @did, @kind, @tag, @url)`)
       }
     }
 

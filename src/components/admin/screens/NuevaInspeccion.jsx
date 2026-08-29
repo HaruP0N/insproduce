@@ -6,6 +6,7 @@ import { Field } from './_ui'
 import ImageUploader from '@/components/ImageUploader'
 import { useI18n } from '@/lib/i18n'
 import { commodityVisual } from '@/lib/inspectorData'
+import { PHOTO_SET, photoSetKey } from '@/lib/photoSet'
 
 const EMPTY_HEADER = {
   producer: '', lot: '', pallet_number: '', variety: '', caliber: '',
@@ -48,8 +49,37 @@ export function baxloClass(v) {
   return { label: 'Firme', bg: '#E3F2E8', fg: '#1D5E3A' }
 }
 
+// Set de fotos oficial FTF: 7 generales (una vez por empaque) + 11 por variedad,
+// numeradas en el orden del instructivo "Photo Set for Inspection".
+function PhotoSetCard({ photos, setPhotos, saving, t, lang }) {
+  const taken = PHOTO_SET.filter((p) => (photos[photoSetKey(p.tag)] || []).length > 0).length
+  const grp = (g) => PHOTO_SET.filter((p) => p.group === g)
+  const slot = (p) => (
+    <div key={p.tag} style={{ background: 'var(--surface-2, rgba(0,0,0,.02))', borderRadius: 10, padding: 10, border: '1px solid var(--border)' }}>
+      <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ width: 18, height: 18, borderRadius: '50%', background: (photos[photoSetKey(p.tag)] || []).length ? 'var(--accent-strong)' : 'var(--surface-2, rgba(0,0,0,.08))', color: (photos[photoSetKey(p.tag)] || []).length ? '#fff' : 'var(--text-faint)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10.5, fontWeight: 800, flexShrink: 0 }}>{p.n}</span>
+        {lang === 'en' ? p.en : p.es}
+      </label>
+      <ImageUploader fieldKey={photoSetKey(p.tag)} images={photos[photoSetKey(p.tag)] || []}
+        onChange={(urls) => setPhotos((prev) => ({ ...prev, [photoSetKey(p.tag)]: urls }))} maxImages={3} disabled={saving} />
+    </div>
+  )
+  return (
+    <Card title={`${t('ni.photoSet')} · ${taken}/18`} sub={t('ni.photoSetSub')} style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 8 }}>{t('ni.photoSetGeneral')}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(200px, 100%), 1fr))', gap: 10, marginBottom: 14 }}>
+        {grp('general').map(slot)}
+      </div>
+      <div style={{ fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 8 }}>{t('ni.photoSetVariety')}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(200px, 100%), 1fr))', gap: 10 }}>
+        {grp('variety').map(slot)}
+      </div>
+    </Card>
+  )
+}
+
 export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }) {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const [commodities, setCommodities] = useState([])
   const [code, setCode] = useState('')
   const [standards, setStandards] = useState([])
@@ -60,12 +90,17 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
   const [values, setValues] = useState({})
   const [photos, setPhotos] = useState({})
   const [saving, setSaving] = useState(false)
+  const [step, setStep] = useState(1) // 1 = datos iniciales (identificación), 2 = datos de la inspección
   const [inGrams, setInGrams] = useState(true) // defectos en gramos → % automático con el peso muestra
 
   // Contexto desde Arribos: pre-carga commodity y, en reinspección, los datos del pallet
   useEffect(() => {
     if (!ctx) return
     if (ctx.arrival?.commodity_code) setCode(ctx.arrival.commodity_code)
+    // fecha de embalaje del arribo (packing date del contenedor)
+    if (ctx.arrival?.packing_date) {
+      setHeader((p) => ({ ...p, packaging_date: p.packaging_date || String(ctx.arrival.packing_date).slice(0, 10) }))
+    }
     // pallet elegido desde el manifiesto del contenedor: cabecera prellenada
     if (ctx.prefill) {
       setHeader((p) => ({
@@ -206,6 +241,14 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
     }
   }
 
+  const nextStep = () => {
+    if (!code) return
+    if (!header.lot.trim() || !header.producer.trim())
+      return onToast({ title: t('ni.needLotProducer'), bad: true })
+    setStep(2)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const numberField = (key, labelKey) => (
     <Field label={t(labelKey)}>
       <input className="input" type="number" step="0.01" value={header[key]} onChange={setH(key)} />
@@ -224,11 +267,30 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
       {ctx?.arrival && (
         <div className="form-help" style={{ marginBottom: 12, padding: '9px 13px', background: 'var(--surface-2, rgba(99,102,241,.06))', border: '1px solid var(--border)', borderRadius: 9, fontSize: 13 }}>
           📦 {t('ni.arrivalBanner', { c: ctx.arrival.container })}
+          {ctx.arrival.warehouse ? <> · 🏭 {ctx.arrival.warehouse}</> : null}
+          {ctx.arrival.week_no ? <> · {t('arr.week')} {ctx.arrival.week_no}</> : null}
           {ctx.reinspect && <> · ↺ {t('ni.reinspBanner', { id: ctx.reinspect.id, lot: ctx.reinspect.lot || '—' })}</>}
         </div>
       )}
-      <div className="grid cols-2-1" style={{ alignItems: 'start', marginBottom: 16 }}>
-        <Card title={t('ni.headerTitle')} sub={t('ni.headerSub')}>
+
+      {/* indicador de etapas */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+        {[1, 2].map((n) => (
+          <button key={n} type="button" onClick={() => (n === 1 ? setStep(1) : nextStep())}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7, border: '1px solid var(--border)',
+              borderRadius: 999, padding: '5px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+              background: step === n ? 'var(--accent-strong)' : 'var(--surface, transparent)',
+              color: step === n ? '#fff' : 'var(--text-dim)',
+            }}>
+            <span style={{ width: 17, height: 17, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, background: step === n ? 'rgba(255,255,255,.25)' : 'var(--surface-2, rgba(0,0,0,.06))' }}>{n}</span>
+            {n === 1 ? t('ni.step1') : t('ni.step2')}
+          </button>
+        ))}
+      </div>
+
+      {step === 1 && (
+        <Card title={t('ni.step1Title')} sub={t('ni.step1Sub')}>
           <div style={GRID3}>
             <Field label={t('ni.commodity')} required>
               <select className="select" value={code} onChange={e => setCode(e.target.value)}>
@@ -267,100 +329,131 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
             <Field label={t('ni.packDate')}>
               <input className="input" type="date" value={header.packaging_date} onChange={setH('packaging_date')} />
             </Field>
-            {numberField('net_weight', 'ni.netWeight')}
-            <Field label={t('ni.sampleWeight')} help={t('ni.sampleWeightHelp')} required>
-              <input className="input" type="number" step="0.1" value={header.sample_weight_g} onChange={setH('sample_weight_g')} placeholder="1070" />
-            </Field>
-            {numberField('brix_avg', 'ni.brix')}
-            {numberField('temp_pulp', 'ni.tempPulp')}
-            {numberField('baxlo_min', 'ni.baxloMin')}
-            {numberField('baxlo_mode', 'ni.baxloMode')}
-            {numberField('baxlo_max', 'ni.baxloMax')}
           </div>
-          <Field label={t('ni.notes')}>
-            <textarea className="input" rows={3} value={header.notes} onChange={setH('notes')} />
-          </Field>
+          <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+            <button className="btn" onClick={onCancel}>{t('common.cancel')}</button>
+            <button className="btn btn-primary" onClick={nextStep} disabled={!code}>
+              {t('ni.next')} <Icon name="chevRight" size={15} />
+            </button>
+          </div>
         </Card>
+      )}
 
-        <Card title={t('ni.summary')}>
-          <div className="form-help" style={{ marginBottom: 10 }}>{t('ni.summaryHelp')}</div>
-          <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 7 }}>
-            <div><b>{t('ni.commodity')}:</b> {code || '—'}</div>
-            <div><b>{t('ni.metrics')}:</b> {fields.length}</div>
-            <div><b>{t('ni.photosCount')}:</b> {Object.values(photos).reduce((a, p) => a + p.length, 0)}</div>
-            {bx && (
-              <div><b>Baxlo:</b>{' '}
-                <span style={{ background: bx.bg, color: bx.fg, padding: '2px 9px', borderRadius: 999, fontSize: 11.5, fontWeight: 800 }}>
-                  {bx.label}
-                </span>
+      {step === 2 && (
+        <>
+          {/* resumen de los datos iniciales, con vuelta a la etapa 1 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14, padding: '9px 13px', border: '1px solid var(--border)', borderRadius: 9, background: 'var(--surface-2, rgba(0,0,0,.02))', fontSize: 13 }}>
+            <b>{commodityVisual(code, t).label}</b>
+            <span className="mono">{header.lot || '—'}</span>
+            {header.pallet_number && <span className="mono" style={{ color: 'var(--accent-strong)', fontWeight: 700 }}>{header.pallet_number}</span>}
+            <span style={{ color: 'var(--text-dim)' }}>{header.producer || '—'}{header.variety ? ` · ${header.variety}` : ''}</span>
+            {header.packaging_type && <span style={{ color: 'var(--text-faint)' }}>{header.packaging_type}</span>}
+            <button className="btn btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setStep(1)}>
+              <Icon name="edit" size={13} /> {t('ni.editInitial')}
+            </button>
+          </div>
+
+          <div className="grid cols-2-1" style={{ alignItems: 'start', marginBottom: 16 }}>
+            <Card title={t('ni.step2Title')} sub={t('ni.step2Sub')}>
+              <div style={GRID3}>
+                <Field label={t('ni.sampleWeight')} help={t('ni.sampleWeightHelp')} required>
+                  <input className="input" type="number" step="0.1" value={header.sample_weight_g} onChange={setH('sample_weight_g')} placeholder="1070" />
+                </Field>
+                {numberField('net_weight', 'ni.netWeight')}
+                {numberField('brix_avg', 'ni.brix')}
+                {numberField('temp_pulp', 'ni.tempPulp')}
+                {numberField('baxlo_min', 'ni.baxloMin')}
+                {numberField('baxlo_mode', 'ni.baxloMode')}
+                {numberField('baxlo_max', 'ni.baxloMax')}
               </div>
-            )}
-          </div>
-          {hints.map((h, i) => (
-            <div key={i} className="form-help" style={{ color: '#9c6500', background: '#fdf6e3', border: '1px solid #eadfb8', borderRadius: 8, padding: '7px 10px', marginTop: 10 }}>
-              ⚠ {h}
-            </div>
-          ))}
-          {tplErr && <div className="form-help" style={{ color: 'var(--red)', marginTop: 10 }}>{tplErr}</div>}
-          <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
-            <button className="btn" onClick={onCancel} disabled={saving}>{t('common.cancel')}</button>
-            <button className="btn" onClick={() => submit(true)} disabled={saving || !code}>
-              <Icon name="plus" size={15} />
-              {t('ni.saveNext')}
-            </button>
-            <button className="btn btn-primary" onClick={() => submit(false)} disabled={saving || !code}>
-              <Icon name="check" size={15} />
-              {saving ? t('common.saving') : t('ni.save')}
-            </button>
-          </div>
-        </Card>
-      </div>
+              <Field label={t('ni.notes')}>
+                <textarea className="input" rows={3} value={header.notes} onChange={setH('notes')} />
+              </Field>
+            </Card>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 13, fontWeight: 700 }}>{t('ni.defectMode')}</span>
-        <div className="seg">
-          <button type="button" className={inGrams ? 'on' : ''} onClick={() => setInGrams(true)}>{t('ni.modeGrams')}</button>
-          <button type="button" className={!inGrams ? 'on' : ''} onClick={() => setInGrams(false)}>%</button>
-        </div>
-        {inGrams && <span className="form-help" style={{ margin: 0 }}>{t('ni.modeGramsHelp')}</span>}
-      </div>
-
-      {Object.entries(grouped).map(([grp, grpFields]) => (
-        <Card key={grp} title={t(`ni.group.${grp}`) === `ni.group.${grp}` ? humanize(grp) : t(`ni.group.${grp}`)}
-          style={{ marginBottom: 16 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 14 }}>
-            {grpFields.map(f => (
-              <div key={f.key} style={{ background: 'var(--surface-2, rgba(0,0,0,.02))', borderRadius: 10, padding: 12, border: '1px solid var(--border)' }}>
-                <label className="field-label">
-                  {humanize(bareKey(f.key))}{f.unit === '%' && inGrams ? ' (g)' : f.unit ? ` (${f.unit})` : ''}{f.required ? ' *' : ''}
-                </label>
-                {f.field_type === 'select' ? (
-                  <select className="select" value={values[f.key] ?? ''} onChange={e => setValues(p => ({ ...p, [f.key]: e.target.value }))}>
-                    <option value="">--</option>
-                    {(f.options || []).map(op => <option key={op} value={op}>{op}</option>)}
-                  </select>
-                ) : (
-                  <input className="input" type={f.field_type === 'number' ? 'number' : 'text'}
-                    step={f.field_type === 'number' ? '0.01' : undefined}
-                    min={f.min_value ?? undefined} max={f.max_value ?? undefined}
-                    value={values[f.key] ?? ''} onChange={e => setValues(p => ({ ...p, [f.key]: e.target.value }))} />
-                )}
-                {inGrams && f.unit === '%' && values[f.key] && num(header.sample_weight_g) > 0 && Number.isFinite(Number(values[f.key])) && (
-                  <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--accent-strong)', marginTop: 4 }}>
-                    = {(Number(values[f.key]) / num(header.sample_weight_g) * 100).toFixed(2)}%
+            <Card title={t('ni.summary')}>
+              <div className="form-help" style={{ marginBottom: 10 }}>{t('ni.summaryHelp')}</div>
+              <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 7 }}>
+                <div><b>{t('ni.commodity')}:</b> {code || '—'}</div>
+                <div><b>{t('ni.metrics')}:</b> {fields.length}</div>
+                <div><b>{t('ni.photosCount')}:</b> {Object.values(photos).reduce((a, p) => a + p.length, 0)}</div>
+                {bx && (
+                  <div><b>Baxlo:</b>{' '}
+                    <span style={{ background: bx.bg, color: bx.fg, padding: '2px 9px', borderRadius: 999, fontSize: 11.5, fontWeight: 800 }}>
+                      {bx.label}
+                    </span>
                   </div>
                 )}
-                <div style={{ marginTop: 8 }}>
-                  <ImageUploader fieldKey={f.key} images={photos[f.key] || []}
-                    onChange={urls => setPhotos(p => ({ ...p, [f.key]: urls }))} maxImages={3} disabled={saving} />
-                </div>
               </div>
-            ))}
+              {hints.map((h, i) => (
+                <div key={i} className="form-help" style={{ color: '#9c6500', background: '#fdf6e3', border: '1px solid #eadfb8', borderRadius: 8, padding: '7px 10px', marginTop: 10 }}>
+                  ⚠ {h}
+                </div>
+              ))}
+              {tplErr && <div className="form-help" style={{ color: 'var(--red)', marginTop: 10 }}>{tplErr}</div>}
+              <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+                <button className="btn" onClick={onCancel} disabled={saving}>{t('common.cancel')}</button>
+                <button className="btn" onClick={() => submit(true)} disabled={saving || !code}>
+                  <Icon name="plus" size={15} />
+                  {t('ni.saveNext')}
+                </button>
+                <button className="btn btn-primary" onClick={() => submit(false)} disabled={saving || !code}>
+                  <Icon name="check" size={15} />
+                  {saving ? t('common.saving') : t('ni.save')}
+                </button>
+              </div>
+            </Card>
           </div>
-        </Card>
-      ))}
-      {!fields.length && !tplErr && code && (
-        <Card><div className="empty">{t('common.loading')}</div></Card>
+
+          <PhotoSetCard photos={photos} setPhotos={setPhotos} saving={saving} t={t} lang={lang} />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>{t('ni.defectMode')}</span>
+            <div className="seg">
+              <button type="button" className={inGrams ? 'on' : ''} onClick={() => setInGrams(true)}>{t('ni.modeGrams')}</button>
+              <button type="button" className={!inGrams ? 'on' : ''} onClick={() => setInGrams(false)}>%</button>
+            </div>
+            {inGrams && <span className="form-help" style={{ margin: 0 }}>{t('ni.modeGramsHelp')}</span>}
+          </div>
+
+          {Object.entries(grouped).map(([grp, grpFields]) => (
+            <Card key={grp} title={t(`ni.group.${grp}`) === `ni.group.${grp}` ? humanize(grp) : t(`ni.group.${grp}`)}
+              style={{ marginBottom: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 14 }}>
+                {grpFields.map(f => (
+                  <div key={f.key} style={{ background: 'var(--surface-2, rgba(0,0,0,.02))', borderRadius: 10, padding: 12, border: '1px solid var(--border)' }}>
+                    <label className="field-label">
+                      {humanize(bareKey(f.key))}{f.unit === '%' && inGrams ? ' (g)' : f.unit ? ` (${f.unit})` : ''}{f.required ? ' *' : ''}
+                    </label>
+                    {f.field_type === 'select' ? (
+                      <select className="select" value={values[f.key] ?? ''} onChange={e => setValues(p => ({ ...p, [f.key]: e.target.value }))}>
+                        <option value="">--</option>
+                        {(f.options || []).map(op => <option key={op} value={op}>{op}</option>)}
+                      </select>
+                    ) : (
+                      <input className="input" type={f.field_type === 'number' ? 'number' : 'text'}
+                        step={f.field_type === 'number' ? '0.01' : undefined}
+                        min={f.min_value ?? undefined} max={f.max_value ?? undefined}
+                        value={values[f.key] ?? ''} onChange={e => setValues(p => ({ ...p, [f.key]: e.target.value }))} />
+                    )}
+                    {inGrams && f.unit === '%' && values[f.key] && num(header.sample_weight_g) > 0 && Number.isFinite(Number(values[f.key])) && (
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--accent-strong)', marginTop: 4 }}>
+                        = {(Number(values[f.key]) / num(header.sample_weight_g) * 100).toFixed(2)}%
+                      </div>
+                    )}
+                    <div style={{ marginTop: 8 }}>
+                      <ImageUploader fieldKey={f.key} images={photos[f.key] || []}
+                        onChange={urls => setPhotos(p => ({ ...p, [f.key]: urls }))} maxImages={3} disabled={saving} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          ))}
+          {!fields.length && !tplErr && code && (
+            <Card><div className="empty">{t('common.loading')}</div></Card>
+          )}
+        </>
       )}
     </div>
   )
