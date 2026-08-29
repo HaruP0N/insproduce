@@ -5,6 +5,7 @@ import { Icon } from '@/components/proto/Icon'
 import { Modal, Field, ScreenState, RowAction, ConfirmDialog } from './_ui'
 import { useI18n } from '@/lib/i18n'
 import { commodityVisual } from '@/lib/inspectorData'
+import { parseManifestRows, groupManifest } from '@/lib/manifest'
 
 const api = async (path, opts = {}) => {
   const res = await fetch(path, { credentials: 'include', headers: { 'Content-Type': 'application/json' }, ...opts })
@@ -21,6 +22,14 @@ const EMPTY = {
   destination: '', packing_date: '', inspection_date: '',
 }
 const EMPTY_ROW = { pallet: '', lot: '', producer: '', variety: '' }
+// lee el Shipping Detail Report en el navegador (sin cellDates: las fechas seriales las convierte manifest.js)
+async function readManifestFile(file) {
+  const XLSX = (await import('xlsx')).default || (await import('xlsx'))
+  const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array' })
+  const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null })
+  return parseManifestRows(raw)
+}
+
 const NOTE_TYPES = ['Quality & Condition', 'Temperature', 'Traceability', 'Package', 'Temperature Record']
 const DATE_KEYS = ['arrival_date', 'warehouse_date', 'packing_date', 'inspection_date']
 
@@ -44,6 +53,7 @@ function ArriboWizard({ onClose, onSaved, onToast, edit }) {
   const [rows, setRows] = useState([{ ...EMPTY_ROW }])
   const [inspEmail, setInspEmail] = useState('')
   const [inspectores, setInspectores] = useState([])
+  const [manifest, setManifest] = useState(null) // { info, rows } parseado del Excel
   const [busy, setBusy] = useState(false)
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }))
   const setRow = (i, k, v) => setRows((p) => p.map((r, j) => (j === i ? { ...r, [k]: v } : r)))
@@ -54,6 +64,32 @@ function ArriboWizard({ onClose, onSaved, onToast, edit }) {
   }, [edit])
 
   const filledRows = rows.filter((r) => r.lot.trim() && r.producer.trim())
+
+  // manifiesto Excel: agrupa por pallet, llena las filas del paso 2 y precarga info del paso 1
+  const importManifest = async (file) => {
+    if (!file) return
+    try {
+      const parsed = await readManifestFile(file)
+      if (parsed.errors.length) return onToast({ title: t('arr.manifestErr'), sub: parsed.errors[0], bad: true })
+      const groups = groupManifest(parsed.rows)
+      setManifest(parsed)
+      setRows(groups.map((g) => ({
+        pallet: g.pallet, lot: g.lot || '',
+        producer: g.growers.join(' + '), variety: g.varieties.join(' / '),
+      })))
+      setForm((p) => ({
+        ...p,
+        container: p.container || parsed.info.container || '',
+        order_number: p.order_number || parsed.info.order_number || '',
+        client: p.client || parsed.info.client || '',
+        packaging: p.packaging || [...new Set(parsed.rows.map((r) => r.packaging).filter(Boolean))].join(' / '),
+        cartons: p.cartons || String(parsed.rows.reduce((a, r) => a + (r.cases || 0), 0)),
+      }))
+      onToast({ title: t('arr.manifestImported', { p: groups.length, n: parsed.rows.length }) })
+    } catch (e) {
+      onToast({ title: t('arr.manifestErr'), sub: e.message, bad: true })
+    }
+  }
 
   const submit = async () => {
     if (!form.container.trim()) return onToast({ title: t('arr.needContainer'), bad: true })
@@ -67,6 +103,9 @@ function ArriboWizard({ onClose, onSaved, onToast, edit }) {
       } else {
         const d = await api('/api/arrivals', { method: 'POST', body: JSON.stringify(form) })
         arrivalId = d.id
+        if (manifest?.rows?.length) {
+          await api(`/api/arrivals/${arrivalId}/manifest`, { method: 'PUT', body: JSON.stringify({ rows: manifest.rows }) })
+        }
         // precarga: una asignación pendiente por pallet (el inspector la ve con todo prellenado)
         for (const r of filledRows) {
           await api('/api/inspecciones/asignar', {
@@ -163,6 +202,17 @@ function ArriboWizard({ onClose, onSaved, onToast, edit }) {
       {step === 2 && (
         <div>
           <div className="form-help" style={{ marginBottom: 12 }}>{t('arr.palletsPreloadHelp')}</div>
+          <label className="btn btn-sm" style={{ cursor: 'pointer', marginBottom: 12 }}>
+            <Icon name="arrowUp" size={13} /> {t('arr.manifestImport')}
+            <input type="file" hidden accept=".xlsx,.xlsm,.xls"
+              onChange={(e) => { importManifest(e.target.files?.[0]); e.target.value = '' }} />
+          </label>
+          {manifest && (
+            <div className="form-help" style={{ marginBottom: 12, color: 'var(--accent-strong)' }}>
+              ✓ {t('arr.manifestImported', { p: groupManifest(manifest.rows).length, n: manifest.rows.length })}
+              {manifest.info?.container ? ` · ${manifest.info.container}` : ''}
+            </div>
+          )}
           <Field label={t('arr.assignTo')}>
             <select className="select" value={inspEmail} onChange={(e) => setInspEmail(e.target.value)}>
               <option value="">{t('arr.noAssign')}</option>
@@ -196,6 +246,118 @@ function ArriboWizard({ onClose, onSaved, onToast, edit }) {
   )
 }
 
+// Pallets del contenedor agrupados desde el manifiesto: dropdown por pallet con su
+// composición (un pallet puede venir de varios growers/fechas — badge MIXTO).
+function ManifestSection({ data, t, lang, openPallets, setOpenPallets, inspectores, assignEmail, setAssignEmail, assigning, onAssign, onUpload }) {
+  const groups = groupManifest(data.manifest || [])
+  const inspByPallet = new Map((data.inspections || []).map((i) => [i.pallet_code, i]))
+  const pendingByPallet = new Map((data.pending_assignments || []).map((a) => [a.pallet_number, a]))
+  const fmtD = (d) => (d ? new Date(d).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-CL', { timeZone: 'UTC' }) : '—')
+  const toggle = (p) => setOpenPallets((prev) => {
+    const next = new Set(prev)
+    if (next.has(p)) next.delete(p); else next.add(p)
+    return next
+  })
+
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', margin: '18px 0 8px' }}>
+        {t('arr.manifestTitle')}{groups.length ? ` (${groups.length})` : ''}
+      </div>
+      <div className="form-help" style={{ marginBottom: 8 }}>{t('arr.manifestHelp')}</div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
+        <label className="btn btn-sm" style={{ cursor: 'pointer' }}>
+          <Icon name="arrowUp" size={13} /> {t('arr.manifestUpload')}
+          <input type="file" hidden accept=".xlsx,.xlsm,.xls"
+            onChange={(e) => { onUpload(e.target.files?.[0]); e.target.value = '' }} />
+        </label>
+        {groups.length > 0 && (
+          <select className="select" style={{ maxWidth: 260 }} value={assignEmail} onChange={(e) => setAssignEmail(e.target.value)}>
+            <option value="">{t('arr.noAssign')}</option>
+            {inspectores.map((u) => <option key={u.email} value={u.email}>{u.name} · {u.email}</option>)}
+          </select>
+        )}
+      </div>
+
+      {groups.length > 0 && (
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th style={{ width: 30 }}></th><th>{t('ni.pallet')}</th><th className="num">{t('arr.cases')}</th>
+              <th>{t('arr.growersCol')}</th><th>{t('tbl.variedad')}</th><th>{t('arr.recvDate')}</th><th></th><th style={{ width: 110 }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((g) => {
+              const open = openPallets.has(g.pallet)
+              const done = inspByPallet.get(g.pallet)
+              const pend = pendingByPallet.get(g.pallet)
+              return (
+                <Fragment key={g.pallet}>
+                  <tr onClick={() => toggle(g.pallet)} style={{ cursor: 'pointer' }}>
+                    <td><Icon name={open ? 'chevDown' : 'chevRight'} size={14} /></td>
+                    <td className="mono" style={{ fontWeight: 700 }}>
+                      {g.pallet}
+                      {g.mixed && <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 800, background: '#FDF0E0', color: '#9A5B13', border: '1px solid #EAD3AE', borderRadius: 999, padding: '1px 7px' }}>{t('arr.mixed')}</span>}
+                    </td>
+                    <td className="num mono">{g.cases || '—'}</td>
+                    <td style={{ fontSize: 12.5 }}>{g.growers.join(', ') || '—'}</td>
+                    <td style={{ fontSize: 12.5 }}>{g.varieties.join(' / ') || '—'}</td>
+                    <td className="mono" style={{ fontSize: 12, color: 'var(--text-dim)' }}>{g.dates.length ? g.dates.map(fmtD).join(' / ') : '—'}</td>
+                    <td>
+                      {done
+                        ? <StatusBadge resolucion={done.resolution === 'approved' ? 'aprobado' : done.resolution === 'conditional' ? 'condicional' : done.resolution === 'rejected' ? 'rechazado' : done.resolution} />
+                        : pend
+                          ? <span className="pill-tag"><Icon name="user" size={11} />{t('arr.assigned')} · {pend.inspector_name || ''}</span>
+                          : <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>—</span>}
+                    </td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {!done && !pend && (
+                        <button className="btn btn-sm" disabled={assigning === g.pallet} onClick={() => onAssign(g)}>
+                          {assigning === g.pallet ? '…' : t('arr.assign')}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                  {open && (
+                    <tr>
+                      <td></td>
+                      <td colSpan={7} style={{ padding: '4px 0 10px' }}>
+                        <table className="tbl" style={{ fontSize: 12 }}>
+                          <thead>
+                            <tr>
+                              <th>Grower</th><th className="num">{t('arr.cases')}</th><th>{t('tbl.lote')}</th>
+                              <th>{t('arr.recvDate')}</th><th>{t('tbl.variedad')}</th><th>{t('arr.packagingField')}</th><th></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {g.parts.map((p, i) => (
+                              <tr key={i}>
+                                <td className="mono" style={{ fontWeight: 600 }}>{p.grower_code || '—'}</td>
+                                <td className="num mono">{p.cases ?? '—'}</td>
+                                <td className="mono">{p.lot_code || '—'}</td>
+                                <td className="mono">{fmtD(p.recv_date)}</td>
+                                <td>{p.variety || '—'}</td>
+                                <td style={{ color: 'var(--text-dim)' }}>{p.packaging || '—'}</td>
+                                <td>{p.combined ? <span title={t('arr.combinedHint')} style={{ fontWeight: 800, color: '#9A5B13' }}>*</span> : ''}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
+      {groups.length === 0 && <div className="form-help">{t('arr.manifestEmpty')}</div>}
+    </div>
+  )
+}
+
 function DetalleArribo({ id, onToast, onAddInspection, onReinspect, onBack }) {
   const { t, lang } = useI18n()
   const [data, setData] = useState(null)
@@ -204,6 +366,14 @@ function DetalleArribo({ id, onToast, onAddInspection, onReinspect, onBack }) {
   const [noteDraft, setNoteDraft] = useState({})
   const [savingNotes, setSavingNotes] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [openPallets, setOpenPallets] = useState(() => new Set())
+  const [inspectores, setInspectores] = useState([])
+  const [assignEmail, setAssignEmail] = useState('')
+  const [assigning, setAssigning] = useState(null) // pallet en proceso de asignación
+
+  useEffect(() => {
+    api('/api/users/inspectores').then((d) => setInspectores(Array.isArray(d) ? d : [])).catch(() => {})
+  }, [])
 
   const load = useCallback(() => {
     api(`/api/arrivals/${id}`).then((d) => {
@@ -246,6 +416,40 @@ function DetalleArribo({ id, onToast, onAddInspection, onReinspect, onBack }) {
       onToast({ title: t('arr.errSave'), sub: e.message, bad: true })
     } finally {
       setUploading(false)
+    }
+  }
+
+  const uploadManifest = async (file) => {
+    if (!file) return
+    try {
+      const parsed = await readManifestFile(file)
+      if (parsed.errors.length) return onToast({ title: t('arr.manifestErr'), sub: parsed.errors[0], bad: true })
+      await api(`/api/arrivals/${id}/manifest`, { method: 'PUT', body: JSON.stringify({ rows: parsed.rows }) })
+      onToast({ title: t('arr.manifestSaved', { n: parsed.rows.length }) })
+      load()
+    } catch (e) {
+      onToast({ title: t('arr.manifestErr'), sub: e.message, bad: true })
+    }
+  }
+
+  const assignPallet = async (g) => {
+    if (!assignEmail) return onToast({ title: t('arr.needInspectorRows'), bad: true })
+    setAssigning(g.pallet)
+    try {
+      await api('/api/inspecciones/asignar', {
+        method: 'POST',
+        body: JSON.stringify({
+          lot: g.lot || data.container, producer: g.growers.join(' + ') || 'FTF',
+          variety: g.varieties.join(' / ') || null, commodity: data.commodity_code || 'BLUEBERRY',
+          inspector_email: assignEmail, pallet_number: g.pallet, arrival_id: data.id,
+        }),
+      })
+      onToast({ title: t('asg.created'), sub: `${g.pallet} → ${assignEmail}` })
+      load()
+    } catch (e) {
+      onToast({ title: t('arr.errSave'), sub: e.message, bad: true })
+    } finally {
+      setAssigning(null)
     }
   }
 
@@ -305,6 +509,13 @@ function DetalleArribo({ id, onToast, onAddInspection, onReinspect, onBack }) {
         ))}
       </div>
 
+      <ManifestSection data={data} t={t} lang={lang} openPallets={openPallets} setOpenPallets={setOpenPallets}
+        inspectores={inspectores} assignEmail={assignEmail} setAssignEmail={setAssignEmail}
+        assigning={assigning} onAssign={assignPallet} onUpload={uploadManifest} />
+
+      <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', margin: '18px 0 8px' }}>
+        {t('arr.inspectionsTitle')} ({data.inspections.length})
+      </div>
       <table className="tbl">
         <thead>
           <tr>

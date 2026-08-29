@@ -1,5 +1,5 @@
 // Repositorio de arribos (contenedores): agrupan inspecciones por pallet.
-import { query, appError } from '@/lib/db/mssql'
+import { query, appError, withTransaction, txRequest } from '@/lib/db/mssql'
 
 const num = (v) => {
   if (v === '' || v == null) return null
@@ -155,10 +155,39 @@ export async function getArrival(id) {
     `SELECT id, file_name, description, url, created_at FROM qc.arrival_files
      WHERE arrival_id=@id AND deleted_at IS NULL ORDER BY id`, { id })
 
+  const manifest = await query(
+    `SELECT pallet_code, grower_code, CAST(combined AS int) AS combined, cases, lot_code, recv_date, variety, packaging, origin
+     FROM qc.arrival_manifest WHERE arrival_id=@id ORDER BY pallet_code, id`, { id })
+
   return {
     ...row, inspections: insp.recordset, notes_typed: notes.recordset,
     pending_assignments: pending.recordset, files: files.recordset,
+    manifest: manifest.recordset,
   }
+}
+
+/** Reemplaza el manifiesto del contenedor (una fila por pallet+grower). */
+export async function saveArrivalManifest(arrivalId, rows) {
+  return withTransaction(async (tx) => {
+    await txRequest(tx, { aid: arrivalId }).query(`DELETE FROM qc.arrival_manifest WHERE arrival_id=@aid`)
+    for (const r of rows) {
+      await txRequest(tx, {
+        aid: arrivalId,
+        pallet: String(r.pallet_code || '').trim().slice(0, 50),
+        grower: r.grower_code ? String(r.grower_code).slice(0, 40) : null,
+        combined: r.combined ? 1 : 0,
+        cases: Number.isFinite(Number(r.cases)) ? Number(r.cases) : null,
+        lot: r.lot_code ? String(r.lot_code).slice(0, 80) : null,
+        rdate: r.recv_date || null,
+        variety: r.variety ? String(r.variety).slice(0, 120) : null,
+        pack: r.packaging ? String(r.packaging).slice(0, 80) : null,
+        origin: r.origin ? String(r.origin).slice(0, 80) : null,
+      }).query(
+        `INSERT INTO qc.arrival_manifest (arrival_id, pallet_code, grower_code, combined, cases, lot_code, recv_date, variety, packaging, origin)
+         VALUES (@aid, @pallet, @grower, @combined, @cases, @lot, @rdate, @variety, @pack, @origin)`)
+    }
+    return rows.length
+  })
 }
 
 /** Promedio por defecto (%) entre los pallets del arribo — gráfico de defectos principales del reporte. */
