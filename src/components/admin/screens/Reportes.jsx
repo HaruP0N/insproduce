@@ -9,6 +9,23 @@ const csvEsc = (v) => { const s = String(v ?? ''); return /[",\n;]/.test(s) ? '"
 export default function ReportesScreen({ list = [], dash, onToast }) {
   const { t } = useI18n()
   const [filter, setFilter] = useState('todas')
+  const [genning, setGenning] = useState({}) // id -> true mientras genera
+  const [genUrls, setGenUrls] = useState({}) // id -> url del PDF recién generado
+
+  const genPdf = async (id) => {
+    setGenning(g => ({ ...g, [id]: true }))
+    try {
+      const r = await fetch(`/api/inspecciones/${id}/generar-pdf`, { method: 'POST', credentials: 'include' })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d?.msg || t('rep.genPdfErr'))
+      setGenUrls(u => ({ ...u, [id]: d.pdf_url }))
+      onToast?.({ title: t('rep.genPdfDone') })
+    } catch (e) {
+      onToast?.({ title: t('rep.genPdfErr'), sub: e.message, bad: true })
+    } finally {
+      setGenning(g => ({ ...g, [id]: false }))
+    }
+  }
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
 
@@ -71,11 +88,15 @@ export default function ReportesScreen({ list = [], dash, onToast }) {
             {rows.map(i => (
               <tr key={i.id}>
                 <td className="mono" style={{ color: 'var(--text-dim)' }}>{i.fecha}</td>
-                <td><div className="cell-strong mono" style={{ fontSize: 12.5 }}>{i.lote}</div><div className="cell-dim">{i.productor}</div></td>
+                <td><div className="cell-strong mono" style={{ fontSize: 12.5 }}>{i.lote}{i.pallet ? <span style={{ color: 'var(--accent)', fontWeight: 700 }}> · {i.pallet}</span> : ''}</div><div className="cell-dim">{i.productor}</div></td>
                 <td><span className="pill-tag"><Icon name="user" size={12} />{i.inspector}</span></td>
                 <td className="num"><ScoreCell score={i.score} resolucion={i.resolucion} /></td>
                 <td><StatusBadge resolucion={i.resolucion} /></td>
-                <td>{i.pdfUrl ? <a className="btn btn-icon btn-sm" href={i.pdfUrl} target="_blank" rel="noreferrer" title={t('rep.pdf')}><Icon name="report" size={15} /></a> : <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>—</span>}</td>
+                <td>{(genUrls[i.id] || i.pdfUrl)
+                  ? <a className="btn btn-icon btn-sm" href={genUrls[i.id] || i.pdfUrl} target="_blank" rel="noreferrer" title={t('rep.pdf')}><Icon name="report" size={15} /></a>
+                  : <button className="btn btn-icon btn-sm" title={t('rep.genPdf')} disabled={!!genning[i.id]} onClick={() => genPdf(i.id)}>
+                      {genning[i.id] ? <span style={{ fontSize: 11 }}>…</span> : <Icon name="play" size={15} />}
+                    </button>}</td>
               </tr>
             ))}
           </tbody>

@@ -97,7 +97,9 @@ export async function createInspection(user, body) {
       commodityId: commodity.id, lotCode: body.lot, producerId,
       variety: body.variety, packagingDate: body.packaging_date, packagingTypeId
     })
-    const palletId = await findOrCreatePallet(tx, lotId)
+    // N° de pallet real del payload; sin él se mantiene el pallet sintético 'P1'
+    const palletCode = String(body.pallet_number ?? '').trim().slice(0, 50) || 'P1'
+    const palletId = await findOrCreatePallet(tx, lotId, palletCode)
 
     // Insert cabecera
     const ins = await txRequest(tx, {
@@ -193,7 +195,7 @@ export async function getInspectionDetail(id, user) {
             i.firmness_min, i.firmness_mode, i.firmness_max,
             i.temp_water, i.temp_ambient, i.temp_pulp, i.net_weight, i.notes,
             c.code AS commodity_code, c.name AS commodity_name,
-            l.lot_code AS lot, l.variety, pr.name AS producer,
+            l.lot_code AS lot, l.variety, pr.name AS producer, p.pallet_code,
             r.quality_total_pct, r.condition_total_pct, r.total_defects_pct, r.score, r.resolution, r.worst_band,
             (SELECT TOP 1 status FROM qc.inspection_pdf_versions v WHERE v.inspection_id=i.id ORDER BY version DESC) AS pdf_status,
             (SELECT TOP 1 pdf_url FROM qc.inspection_pdf_versions v WHERE v.inspection_id=i.id ORDER BY version DESC) AS pdf_url
@@ -272,7 +274,7 @@ export async function buildPdfInput(id) {
             i.firmness_min, i.firmness_max, i.firmness_mode,
             i.temp_water, i.temp_ambient, i.temp_pulp, i.net_weight,
             c.code AS commodity_code, c.name AS commodity_name,
-            l.lot_code AS lot, l.variety, pr.name AS producer, u.name AS inspector_name,
+            l.lot_code AS lot, l.variety, pr.name AS producer, p.pallet_code, u.name AS inspector_name,
             s.name AS standard_name,
             r.quality_total_pct, r.condition_total_pct, r.total_defects_pct, r.score, r.resolution, r.worst_band, r.causal_defect_id
      FROM qc.inspections i
@@ -389,7 +391,7 @@ export async function listAll(limit = 500) {
   const r = await query(
     `SELECT TOP (${Number(limit) || 500})
             i.id, i.created_at, i.updated_at, c.code AS commodity_code, c.name AS commodity_name,
-            l.lot_code AS lot, l.variety, pr.name AS producer, i.created_by_user_id, u.name AS inspector_name,
+            l.lot_code AS lot, l.variety, pr.name AS producer, p.pallet_code, i.created_by_user_id, u.name AS inspector_name,
             res.score, res.resolution,
             (SELECT TOP 1 status FROM qc.inspection_pdf_versions v WHERE v.inspection_id=i.id ORDER BY version DESC) AS pdf_status,
             (SELECT TOP 1 pdf_url FROM qc.inspection_pdf_versions v WHERE v.inspection_id=i.id ORDER BY version DESC) AS pdf_url
@@ -409,7 +411,7 @@ export async function listAll(limit = 500) {
 export async function listByCreator(userId) {
   const r = await query(
     `SELECT i.id, i.created_at, c.code AS commodity_code, c.name AS commodity_name,
-            l.lot_code AS lot, l.variety, pr.name AS producer,
+            l.lot_code AS lot, l.variety, pr.name AS producer, p.pallet_code,
             res.score, res.resolution,
             (SELECT TOP 1 status FROM qc.inspection_pdf_versions v WHERE v.inspection_id=i.id ORDER BY version DESC) AS pdf_status,
             (SELECT TOP 1 pdf_url FROM qc.inspection_pdf_versions v WHERE v.inspection_id=i.id ORDER BY version DESC) AS pdf_url

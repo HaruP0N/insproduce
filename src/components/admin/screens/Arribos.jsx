@@ -152,7 +152,7 @@ function DetalleArribo({ id, onToast, onAddInspection, onReinspect, onBack }) {
           {data.inspections.map((i) => (
             <tr key={i.id}>
               <td className="mono">#{i.id}{i.reinspection_of ? <span title={`${t('arr.reinspOf')} #${i.reinspection_of}`} style={{ color: 'var(--accent)', fontWeight: 700 }}> ↺</span> : ''}</td>
-              <td><div className="cell-strong mono" style={{ fontSize: 12 }}>{i.lot || '—'}</div><div className="cell-dim">{i.producer || ''}</div></td>
+              <td><div className="cell-strong mono" style={{ fontSize: 12 }}>{i.lot || '—'}{i.pallet_code && i.pallet_code !== 'P1' ? <span style={{ color: 'var(--accent)', fontWeight: 700 }}> · {i.pallet_code}</span> : ''}</div><div className="cell-dim">{i.producer || ''}</div></td>
               <td style={{ color: 'var(--text-dim)' }}>{i.variety || '—'}</td>
               <td className="num">{i.score ?? '—'}</td>
               <td><StatusBadge resolucion={i.resolution === 'approved' ? 'aprobado' : i.resolution === 'conditional' ? 'condicional' : i.resolution === 'rejected' ? 'rechazado' : i.resolution} /></td>

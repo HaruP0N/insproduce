@@ -367,14 +367,23 @@ function SectionCard({ n, icon, title, sub, children }) {
 }
 
 /* ───────────────── captura ───────────────── */
+// 'P3' → 'P4'; sin sufijo numérico o vacío → '' (lo escribe el usuario)
+const nextPalletCode = (code) => {
+  const c = String(code || '').trim()
+  if (!c) return 'P2' // el guardado sin N° usó 'P1'
+  const m = c.match(/^(.*?)(\d+)$/)
+  return m ? m[1] + (Number(m[2]) + 1) : ''
+}
+
 const EMPTY_HEADER = {
+  pallet_number: '',
   packaging_type: '', packaging_date: '', net_weight: '',
   brix_avg: '', brix_min: '', brix_max: '',
   diameter_min: '', diameter_max: '',
   temp_water: '', temp_ambient: '', temp_pulp: '', notes: '',
 }
 
-function CaptureForm({ task, onSave, onCancel, onError }) {
+function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
   const { t } = useI18n()
   const c = commodityVisual(task.commodity_code, t)
   const [fields, setFields] = useState([])
@@ -414,11 +423,12 @@ function CaptureForm({ task, onSave, onCancel, onError }) {
   const photoCount = useMemo(() => Object.values(photos).reduce((a, b) => a + b.length, 0), [photos])
   const progress = fields.length ? Math.round((filled / fields.length) * 100) : 0
 
-  const save = async () => {
+  const save = async (andNext = false) => {
     setSaving(true)
     try {
       const payload = {
         commodity_code: task.commodity_code,
+        pallet_number: header.pallet_number.trim() || null,
         producer: task.productor || null,
         lot: task.lote || null,
         variety: task.variedad || null,
@@ -440,6 +450,16 @@ function CaptureForm({ task, onSave, onCancel, onError }) {
       }
       const res = await saveInspection(payload)
       const id = res.id
+      // PDF del informe en segundo plano (no bloquea el guardado)
+      fetch(`/api/inspecciones/${id}/generar-pdf`, { method: 'POST', credentials: 'include' }).catch(() => {})
+      if (andNext) {
+        // mismo lote, siguiente pallet: se conserva la cabecera y se limpian métricas y fotos
+        setHeader(p => ({ ...p, pallet_number: nextPalletCode(p.pallet_number) }))
+        setValues({}); setPhotos({})
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+        onSaveNext?.({ id, lote: task.lote })
+        return
+      }
       let resolucion = null
       try { const d = await getDetail(id); resolucion = d.resolution } catch {}
       onSave({ id, lote: task.lote, resolucion })
@@ -496,6 +516,10 @@ function CaptureForm({ task, onSave, onCancel, onError }) {
         <div className="capture-col">
           <SectionCard n="1" icon="package" title={t('cap.s1')} sub={t('cap.s1sub')}>
             <div className="form-grid">
+              <div>
+                <label className="field-label">{t('cap.pallet')}</label>
+                <input className="input" value={header.pallet_number} onChange={e => setH('pallet_number', e.target.value)} placeholder="P1" />
+              </div>
               <div>
                 <label className="field-label">{t('cap.pkgType')}</label>
                 <select className="select" value={header.packaging_type} onChange={e => setH('packaging_type', e.target.value)}>
@@ -580,8 +604,11 @@ function CaptureForm({ task, onSave, onCancel, onError }) {
             <div className="sum-stat"><span className="k"><Icon name="camera" size={14} />{t('cap.photos')}</span><span className="v">{photoCount}</span></div>
 
             <div className="capture-actions" style={{ flexDirection: 'column', marginTop: 18 }}>
-              <button className="btn btn-primary" style={{ width: '100%' }} onClick={save} disabled={saving || loadingTpl}>
+              <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => save(false)} disabled={saving || loadingTpl}>
                 <Icon name="check" size={17} stroke={2.4} />{saving ? t('common.saving') : t('cap.save')}
+              </button>
+              <button className="btn" style={{ width: '100%' }} onClick={() => save(true)} disabled={saving || loadingTpl}>
+                {t('cap.saveNext')}
               </button>
               <button className="btn" style={{ width: '100%' }} onClick={onCancel} disabled={saving}>{t('common.cancel')}</button>
             </div>
@@ -636,7 +663,7 @@ export default function InspectorApp() {
       {!capture && <InspTopBar tab={tab} onTab={setTab} assignedCount={assigned.length} user={user} theme={theme} onTheme={() => setTheme(th => th === 'dark' ? 'light' : 'dark')} onLogout={logout} />}
       <div className="insp-content">
         {capture
-          ? <CaptureForm task={capture} onSave={onSaved} onCancel={() => setCapture(null)} onError={(m) => showToast({ title: t('common.error'), sub: m, bad: true })} />
+          ? <CaptureForm task={capture} onSave={onSaved} onSaveNext={(r) => { loadCompleted(); showToast({ title: t('cap.savedNext'), sub: `${r.lote} · ID ${r.id}` }) }} onCancel={() => setCapture(null)} onError={(m) => showToast({ title: t('common.error'), sub: m, bad: true })} />
           : tab === 'asignadas'
             ? <QueueScreen assigned={assigned} loading={loadingA} onStart={setCapture} />
             : <CompletedScreen completed={completed} loading={loadingC} onOpen={setDrawer} />}

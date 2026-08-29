@@ -66,7 +66,7 @@ export async function getArrival(id) {
   if (!row) throw appError(404, 'Arribo no encontrado')
 
   const insp = await query(
-    `SELECT i.id, i.created_at, i.reinspection_of, l.lot_code AS lot, l.variety, pr.name AS producer,
+    `SELECT i.id, i.created_at, i.reinspection_of, l.lot_code AS lot, l.variety, pr.name AS producer, p.pallet_code,
             r.score, r.resolution, r.worst_band, d.label AS causal,
             i.firmness_min, i.firmness_mode, i.firmness_max, i.brix_avg,
             (SELECT TOP 1 status FROM qc.inspection_pdf_versions v WHERE v.inspection_id=i.id ORDER BY version DESC) AS pdf_status

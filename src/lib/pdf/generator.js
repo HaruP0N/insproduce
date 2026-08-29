@@ -87,7 +87,10 @@ export async function generateInspectionPDF(report) {
   // meta strip
   let y = 38
   const meta = [
-    ['Producer', insp.producer], ['Variety', insp.variety], ['Inspector', insp.inspector_name],
+    ['Producer', insp.producer], ['Variety', insp.variety],
+    // pallet real (P1 es el código sintético de las inspecciones sin N° de pallet)
+    ...(insp.pallet_code && insp.pallet_code !== 'P1' ? [['Pallet', insp.pallet_code]] : []),
+    ['Inspector', insp.inspector_name],
     ['Commodity', insp.commodity_name], ['Standard', insp.standard_name],
   ]
   const cellW = CW / meta.length

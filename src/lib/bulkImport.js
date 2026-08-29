@@ -7,6 +7,7 @@
 export const HEADER_COLUMNS = [
   { key: 'producer', es: 'Productor', en: 'Producer', req: true, width: 26 },
   { key: 'lot', es: 'Lote', en: 'Lot', req: true, width: 18 },
+  { key: 'pallet_number', es: 'N° Pallet', en: 'Pallet Number', width: 12 },
   { key: 'variety', es: 'Variedad', en: 'Variety', width: 16 },
   { key: 'caliber', es: 'Calibre', en: 'Caliber', width: 12 },
   { key: 'packaging_code', es: 'Cod. Embalaje', en: 'Packaging code', width: 14 },

@@ -17,6 +17,7 @@ export function mapInspection(r) {
     fecha: fechaCorta(r.created_at),
     createdAt: r.created_at,
     lote: r.lot || '—',
+    pallet: r.pallet_code && r.pallet_code !== 'P1' ? r.pallet_code : null,
     productor: r.producer || '—',
     commodity: r.commodity_name || r.commodity_code || '',
     variedad: r.variety || '—',

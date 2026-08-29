@@ -18,6 +18,7 @@ export default function CargaMasivaScreen({ onToast, onDone }) {
   const [parsed, setParsed] = useState(null)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState(null)
+  const [pdfProg, setPdfProg] = useState(null) // { done, total } mientras se generan los informes
   const [over, setOver] = useState(false)
   const inputRef = useRef(null)
 
@@ -57,6 +58,21 @@ export default function CargaMasivaScreen({ onToast, onDone }) {
     }
   }
 
+  // Los informes PDF no se generan solos: tras importar se piden de a 3 en paralelo
+  const genPdfs = async (ids) => {
+    if (!ids.length) return
+    setPdfProg({ done: 0, total: ids.length })
+    const CHUNK = 3
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      await Promise.all(ids.slice(i, i + CHUNK).map(id =>
+        fetch(`/api/inspecciones/${id}/generar-pdf`, { method: 'POST', credentials: 'include' }).catch(() => {})
+      ))
+      setPdfProg({ done: Math.min(i + CHUNK, ids.length), total: ids.length })
+    }
+    setPdfProg(null)
+    onToast({ title: t('bulk.pdfDone', { n: ids.length }) })
+  }
+
   const importar = async () => {
     if (!parsed?.rows.length) return
     setBusy(true)
@@ -74,7 +90,10 @@ export default function CargaMasivaScreen({ onToast, onDone }) {
         sub: data.failed ? t('bulk.someFailed', { n: data.failed }) : undefined,
         bad: data.created === 0,
       })
-      if (data.created > 0) onDone?.()
+      if (data.created > 0) {
+        onDone?.()
+        genPdfs((data.details?.created || []).map(c => c.id).filter(Boolean))
+      }
     } catch (e) {
       onToast({ title: t('bulk.errImport'), sub: e.message, bad: true })
     } finally {
@@ -178,7 +197,7 @@ export default function CargaMasivaScreen({ onToast, onDone }) {
           {result && (
             <div style={{ marginTop: 16 }}>
               <div className="badge good" style={{ fontSize: 13 }}>
-                <Icon name="checkCircle" size={14} />{t('bulk.done', { n: result.created })}
+                <Icon name="checkCircle" size={14} />{t('bulk.done', { n: result.created })}{pdfProg ? <span style={{ marginLeft: 8, color: 'var(--text-dim)', fontWeight: 400 }}>· {t('bulk.pdfGen', pdfProg)}</span> : null}
               </div>
               {result.failed > 0 && (
                 <div className="form-help" style={{ marginTop: 10, color: 'var(--red)' }}>

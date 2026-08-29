@@ -47,7 +47,7 @@ export async function GET(req) {
     // Fila de ejemplo (se borra antes de cargar; queda en gris/cursiva para que se note)
     const example = {
       producer: lang === 'en' ? 'EXAMPLE — delete this row' : 'EJEMPLO — borrar esta fila',
-      lot: 'L-2026-001', variety: 'Duke', packaging_type: '12x6 Oz',
+      lot: 'L-2026-001', pallet_number: 'P1', variety: 'Duke', packaging_type: '12x6 Oz',
       packaging_date: new Date().toISOString().slice(0, 10),
       net_weight: 1.7, brix_avg: 12.5, temp_pulp: 1.5,
       baxlo_min: 62, baxlo_mode: 78, baxlo_max: 88,

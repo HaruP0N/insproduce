@@ -8,7 +8,7 @@ import { useI18n } from '@/lib/i18n'
 import { commodityVisual } from '@/lib/inspectorData'
 
 const EMPTY_HEADER = {
-  producer: '', lot: '', variety: '', caliber: '',
+  producer: '', lot: '', pallet_number: '', variety: '', caliber: '',
   packaging_code: '', packaging_type: '', packaging_date: '',
   net_weight: '', brix_avg: '', baxlo_min: '', baxlo_mode: '', baxlo_max: '',
   temp_water: '', temp_ambient: '', temp_pulp: '', notes: '',
@@ -26,6 +26,15 @@ function groupFields(fields) {
 }
 const humanize = (s) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 const bareKey = (k) => { const dot = k.indexOf('.'); return dot === -1 ? k : k.substring(dot + 1) }
+
+
+// 'P3' → 'P4'; sin sufijo numérico o vacío → '' (lo escribe el usuario)
+export function nextPalletCode(code) {
+  const c = String(code || '').trim()
+  if (!c) return 'P2' // el guardado sin N° usó 'P1'
+  const m = c.match(/^(.*?)(\d+)$/)
+  return m ? m[1] + (Number(m[2]) + 1) : ''
+}
 
 const GRID3 = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0 16px' }
 
@@ -61,6 +70,7 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
         ...p,
         producer: ctx.reinspect.producer || '',
         lot: ctx.reinspect.lot || '',
+        pallet_number: (ctx.reinspect.pallet_code && ctx.reinspect.pallet_code !== 'P1') ? ctx.reinspect.pallet_code : '',
         variety: ctx.reinspect.variety || '',
       }))
     }
@@ -109,7 +119,7 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
   const setH = (k) => (e) => setHeader(p => ({ ...p, [k]: e.target.value }))
   const num = (v) => (v === '' || v == null ? null : Number(v))
 
-  const submit = async () => {
+  const submit = async (andNext = false) => {
     if (!code) return
     if (!header.lot.trim() || !header.producer.trim())
       return onToast({ title: t('ni.needLotProducer'), bad: true })
@@ -119,6 +129,7 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
         commodity_code: code,
         producer: header.producer.trim() || null,
         lot: header.lot.trim() || null,
+        pallet_number: header.pallet_number.trim() || null,
         variety: header.variety || null,
         caliber: header.caliber || null,
         packaging_code: header.packaging_code || null,
@@ -147,11 +158,21 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.msg || t('ni.errSave'))
-      onToast({
-        title: t('ni.saved'),
-        sub: `ID ${data.id}` + (data.warnings?.length ? ` · ${data.warnings.join(' · ')}` : ''),
-      })
-      onDone()
+      // PDF del informe en segundo plano (no bloquea el guardado)
+      fetch(`/api/inspecciones/${data.id}/generar-pdf`, { method: 'POST', credentials: 'include' }).catch(() => {})
+      if (andNext) {
+        // mismo lote, siguiente pallet: se conserva la cabecera y se limpian métricas y fotos
+        setHeader(p => ({ ...p, pallet_number: nextPalletCode(p.pallet_number) }))
+        setValues({}); setPhotos({})
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+        onToast({ title: t('ni.savedNext'), sub: `ID ${data.id}` })
+      } else {
+        onToast({
+          title: t('ni.saved'),
+          sub: `ID ${data.id}` + (data.warnings?.length ? ` · ${data.warnings.join(' · ')}` : ''),
+        })
+        onDone()
+      }
     } catch (e) {
       onToast({ title: t('ni.errSave'), sub: e.message, bad: true })
     } finally {
@@ -201,6 +222,9 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
             </Field>
             <Field label={t('ni.lot')} required>
               <input className="input" value={header.lot} onChange={setH('lot')} placeholder="L-2026-001" />
+            </Field>
+            <Field label={t('ni.pallet')} help={t('ni.palletHelp')}>
+              <input className="input" value={header.pallet_number} onChange={setH('pallet_number')} placeholder="P1" />
             </Field>
             <Field label={t('tbl.variedad')}>
               <input className="input" value={header.variety} onChange={setH('variety')} placeholder="Duke, Ventura…" />
@@ -253,7 +277,11 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
           {tplErr && <div className="form-help" style={{ color: 'var(--red)', marginTop: 10 }}>{tplErr}</div>}
           <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
             <button className="btn" onClick={onCancel} disabled={saving}>{t('common.cancel')}</button>
-            <button className="btn btn-primary" onClick={submit} disabled={saving || !code}>
+            <button className="btn" onClick={() => submit(true)} disabled={saving || !code}>
+              <Icon name="plus" size={15} />
+              {t('ni.saveNext')}
+            </button>
+            <button className="btn btn-primary" onClick={() => submit(false)} disabled={saving || !code}>
               <Icon name="check" size={15} />
               {saving ? t('common.saving') : t('ni.save')}
             </button>
