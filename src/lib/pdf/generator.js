@@ -246,8 +246,8 @@ export async function generateInspectionPDF(report) {
     ['Brix mode', fmt(insp.brix_mode)],
     ['Firmness (min / mode / max)', `${fmt(insp.firmness_min)} / ${fmt(insp.firmness_mode)} / ${fmt(insp.firmness_max)}`],
     ['Diameter (min / max) mm', `${fmt(insp.diameter_min)} / ${fmt(insp.diameter_max)}`],
-    ['Pulp / ambient / water °C', `${fmt(insp.temp_pulp)} / ${fmt(insp.temp_ambient)} / ${fmt(insp.temp_water)}`],
-    ['Net weight', fmt(insp.net_weight, 2)],
+    ['Pulp temp °C', fmt(insp.temp_pulp)],
+    ['Net weight (g) / Sample (g)', `${fmt(insp.net_weight)} / ${fmt(insp.sample_weight_g)}`],
   ]
   hm.forEach((it, i) => {
     const x = M + (i % 2) * (CW / 2), ty = py + Math.floor(i / 2) * 11

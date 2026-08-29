@@ -5,7 +5,7 @@ import { useI18n } from '@/lib/i18n'
 import { Modal, Field } from './_ui'
 import { updateInspeccion, updateInspeccionMetrics } from '@/lib/adminCrud'
 
-const HEAD_KEYS = ['producer', 'variety', 'brix_avg', 'brix_min', 'brix_max', 'diameter_min', 'diameter_max', 'temp_water', 'temp_ambient', 'temp_pulp', 'net_weight', 'notes']
+const HEAD_KEYS = ['producer', 'variety', 'brix_avg', 'brix_min', 'brix_max', 'diameter_min', 'diameter_max', 'temp_water', 'temp_ambient', 'temp_pulp', 'net_weight', 'sample_weight_g', 'notes']
 const numOrNull = (v) => v === '' || v == null ? null : Number(v)
 
 export default function EditarInspeccion({ detail, onClose, onSaved, onToast }) {
@@ -32,7 +32,7 @@ export default function EditarInspeccion({ detail, onClose, onSaved, onToast }) 
         brix_avg: numOrNull(head.brix_avg), brix_min: numOrNull(head.brix_min), brix_max: numOrNull(head.brix_max),
         diameter_min: numOrNull(head.diameter_min), diameter_max: numOrNull(head.diameter_max),
         temp_water: numOrNull(head.temp_water), temp_ambient: numOrNull(head.temp_ambient), temp_pulp: numOrNull(head.temp_pulp),
-        net_weight: numOrNull(head.net_weight),
+        net_weight: numOrNull(head.net_weight), sample_weight_g: numOrNull(head.sample_weight_g),
         notes: head.notes || null,
       })
       onToast({ title: t('edit.saved'), sub: `#${detail.id}` })
@@ -70,11 +70,10 @@ export default function EditarInspeccion({ detail, onClose, onSaved, onToast }) 
             <input className="input mono" inputMode="decimal" value={head.diameter_max} onChange={e => setH('diameter_max', e.target.value)} placeholder={t('cap.max')} />
           </div>
         </Field>
-        <Field label={`${t('cap.netWeight')} (kg)`}><input className="input mono" inputMode="decimal" value={head.net_weight} onChange={e => setH('net_weight', e.target.value)} /></Field>
+        <Field label={`${t('cap.netWeight')} (g)`}><input className="input mono" inputMode="decimal" value={head.net_weight} onChange={e => setH('net_weight', e.target.value)} /></Field>
+        <Field label={`${t('cap.sampleWeight')} (g)`}><input className="input mono" inputMode="decimal" value={head.sample_weight_g} onChange={e => setH('sample_weight_g', e.target.value)} /></Field>
       </div>
       <div className="form-grid">
-        <Field label={`${t('cap.water')} (°C)`}><input className="input mono" inputMode="decimal" value={head.temp_water} onChange={e => setH('temp_water', e.target.value)} /></Field>
-        <Field label={`${t('cap.ambient')} (°C)`}><input className="input mono" inputMode="decimal" value={head.temp_ambient} onChange={e => setH('temp_ambient', e.target.value)} /></Field>
       </div>
       <div className="form-grid">
         <Field label={`${t('cap.pulp')} (°C)`}><input className="input mono" inputMode="decimal" value={head.temp_pulp} onChange={e => setH('temp_pulp', e.target.value)} /></Field>

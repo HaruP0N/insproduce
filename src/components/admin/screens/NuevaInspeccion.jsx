@@ -10,8 +10,8 @@ import { commodityVisual } from '@/lib/inspectorData'
 const EMPTY_HEADER = {
   producer: '', lot: '', pallet_number: '', variety: '', caliber: '',
   packaging_code: '', packaging_type: '', packaging_date: '',
-  net_weight: '', brix_avg: '', baxlo_min: '', baxlo_mode: '', baxlo_max: '',
-  temp_water: '', temp_ambient: '', temp_pulp: '', notes: '',
+  net_weight: '', sample_weight_g: '', brix_avg: '', baxlo_min: '', baxlo_mode: '', baxlo_max: '',
+  temp_pulp: '', notes: '',
 }
 
 function groupFields(fields) {
@@ -60,6 +60,7 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
   const [values, setValues] = useState({})
   const [photos, setPhotos] = useState({})
   const [saving, setSaving] = useState(false)
+  const [inGrams, setInGrams] = useState(true) // defectos en gramos → % automático con el peso muestra
 
   // Contexto desde Arribos: pre-carga commodity y, en reinspección, los datos del pallet
   useEffect(() => {
@@ -134,6 +135,21 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
     if (!code) return
     if (!header.lot.trim() || !header.producer.trim())
       return onToast({ title: t('ni.needLotProducer'), bad: true })
+    if (header.temp_pulp === '')
+      return onToast({ title: t('ni.needTempPulp'), bad: true })
+    // modo gramos: g defecto / g muestra * 100 (el motor y las tolerancias trabajan en %)
+    const sw = num(header.sample_weight_g)
+    const metricsOut = {}
+    for (const [k, v] of Object.entries(values)) {
+      if (v === '' || v == null) { continue }
+      const f = fields.find((x) => x.key === k)
+      if (inGrams && f?.unit === '%' && Number.isFinite(Number(v))) {
+        if (!sw) return onToast({ title: t('ni.needSampleWeight'), bad: true })
+        metricsOut[k] = String(Math.round((Number(v) / sw) * 10000) / 100)
+      } else {
+        metricsOut[k] = v
+      }
+    }
     setSaving(true)
     try {
       const payload = {
@@ -147,15 +163,14 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
         packaging_type: header.packaging_type || null,
         packaging_date: header.packaging_date || null,
         net_weight: num(header.net_weight),
+        sample_weight_g: num(header.sample_weight_g),
         brix_avg: num(header.brix_avg),
-        temp_water: num(header.temp_water),
-        temp_ambient: num(header.temp_ambient),
         temp_pulp: num(header.temp_pulp),
         baxlo_min: num(header.baxlo_min),
         baxlo_mode: num(header.baxlo_mode),
         baxlo_max: num(header.baxlo_max),
         notes: header.notes || null,
-        metrics: values,
+        metrics: metricsOut,
         photos,
         assignment_id: null,
         standard_id: standardId ? Number(standardId) : null,
@@ -253,9 +268,10 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
               <input className="input" type="date" value={header.packaging_date} onChange={setH('packaging_date')} />
             </Field>
             {numberField('net_weight', 'ni.netWeight')}
+            <Field label={t('ni.sampleWeight')} help={t('ni.sampleWeightHelp')} required>
+              <input className="input" type="number" step="0.1" value={header.sample_weight_g} onChange={setH('sample_weight_g')} placeholder="1070" />
+            </Field>
             {numberField('brix_avg', 'ni.brix')}
-            {numberField('temp_water', 'ni.tempWater')}
-            {numberField('temp_ambient', 'ni.tempAmbient')}
             {numberField('temp_pulp', 'ni.tempPulp')}
             {numberField('baxlo_min', 'ni.baxloMin')}
             {numberField('baxlo_mode', 'ni.baxloMode')}
@@ -300,6 +316,15 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
         </Card>
       </div>
 
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13, fontWeight: 700 }}>{t('ni.defectMode')}</span>
+        <div className="seg">
+          <button type="button" className={inGrams ? 'on' : ''} onClick={() => setInGrams(true)}>{t('ni.modeGrams')}</button>
+          <button type="button" className={!inGrams ? 'on' : ''} onClick={() => setInGrams(false)}>%</button>
+        </div>
+        {inGrams && <span className="form-help" style={{ margin: 0 }}>{t('ni.modeGramsHelp')}</span>}
+      </div>
+
       {Object.entries(grouped).map(([grp, grpFields]) => (
         <Card key={grp} title={t(`ni.group.${grp}`) === `ni.group.${grp}` ? humanize(grp) : t(`ni.group.${grp}`)}
           style={{ marginBottom: 16 }}>
@@ -307,7 +332,7 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
             {grpFields.map(f => (
               <div key={f.key} style={{ background: 'var(--surface-2, rgba(0,0,0,.02))', borderRadius: 10, padding: 12, border: '1px solid var(--border)' }}>
                 <label className="field-label">
-                  {humanize(bareKey(f.key))}{f.unit ? ` (${f.unit})` : ''}{f.required ? ' *' : ''}
+                  {humanize(bareKey(f.key))}{f.unit === '%' && inGrams ? ' (g)' : f.unit ? ` (${f.unit})` : ''}{f.required ? ' *' : ''}
                 </label>
                 {f.field_type === 'select' ? (
                   <select className="select" value={values[f.key] ?? ''} onChange={e => setValues(p => ({ ...p, [f.key]: e.target.value }))}>
@@ -319,6 +344,11 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
                     step={f.field_type === 'number' ? '0.01' : undefined}
                     min={f.min_value ?? undefined} max={f.max_value ?? undefined}
                     value={values[f.key] ?? ''} onChange={e => setValues(p => ({ ...p, [f.key]: e.target.value }))} />
+                )}
+                {inGrams && f.unit === '%' && values[f.key] && num(header.sample_weight_g) > 0 && Number.isFinite(Number(values[f.key])) && (
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--accent-strong)', marginTop: 4 }}>
+                    = {(Number(values[f.key]) / num(header.sample_weight_g) * 100).toFixed(2)}%
+                  </div>
                 )}
                 <div style={{ marginTop: 8 }}>
                   <ImageUploader fieldKey={f.key} images={photos[f.key] || []}

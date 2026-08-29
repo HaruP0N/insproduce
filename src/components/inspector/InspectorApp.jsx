@@ -223,7 +223,7 @@ function CompletedDrawer({ item, onClose }) {
               [t('ins.tempAmbient'), detail.temp_ambient, '°C'],
               [t('ins.tempWater'), detail.temp_water, '°C'],
               [t('ins.caliber'), detail.diameter_min != null || detail.diameter_max != null ? `${detail.diameter_min ?? '—'}–${detail.diameter_max ?? '—'}` : null, 'mm'],
-              [t('ins.netWeight'), detail.net_weight, 'kg'],
+              [t('ins.netWeight'), detail.net_weight, 'g'],
             ].filter(([, v]) => v != null && v !== '')
             return (
               <>
@@ -377,10 +377,10 @@ const nextPalletCode = (code) => {
 
 const EMPTY_HEADER = {
   pallet_number: '',
-  packaging_type: '', packaging_date: '', net_weight: '',
+  packaging_type: '', packaging_date: '', net_weight: '', sample_weight_g: '',
   brix_avg: '', brix_min: '', brix_max: '',
   diameter_min: '', diameter_max: '',
-  temp_water: '', temp_ambient: '', temp_pulp: '', notes: '',
+  temp_pulp: '', notes: '',
 }
 
 function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
@@ -392,6 +392,7 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
   const [values, setValues] = useState({})
   const [photos, setPhotos] = useState({})
   const [saving, setSaving] = useState(false)
+  const [inGrams, setInGrams] = useState(true) // defectos en gramos → % automático con el peso muestra
 
   useEffect(() => {
     let alive = true
@@ -424,6 +425,20 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
   const progress = fields.length ? Math.round((filled / fields.length) * 100) : 0
 
   const save = async (andNext = false) => {
+    if (header.temp_pulp === '') return onError(t('cap.needTempPulp'))
+    // modo gramos: g defecto / g muestra * 100 (el motor y las tolerancias trabajan en %)
+    const sw = header.sample_weight_g === '' ? null : Number(header.sample_weight_g)
+    const metricsOut = {}
+    for (const [k, v] of Object.entries(values)) {
+      if (v === '' || v == null) continue
+      const f = fields.find((x) => x.key === k)
+      if (inGrams && f?.unit === '%' && Number.isFinite(Number(v))) {
+        if (!sw) return onError(t('cap.needSampleWeight'))
+        metricsOut[k] = String(Math.round((Number(v) / sw) * 10000) / 100)
+      } else {
+        metricsOut[k] = v
+      }
+    }
     setSaving(true)
     try {
       const payload = {
@@ -435,16 +450,15 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
         packaging_type: header.packaging_type || null,
         packaging_date: header.packaging_date || null,
         net_weight: header.net_weight === '' ? null : Number(header.net_weight),
+        sample_weight_g: header.sample_weight_g === '' ? null : Number(header.sample_weight_g),
         brix_avg: header.brix_avg === '' ? null : Number(header.brix_avg),
         brix_min: header.brix_min === '' ? null : Number(header.brix_min),
         brix_max: header.brix_max === '' ? null : Number(header.brix_max),
         diameter_min: header.diameter_min === '' ? null : Number(header.diameter_min),
         diameter_max: header.diameter_max === '' ? null : Number(header.diameter_max),
-        temp_water: header.temp_water === '' ? null : Number(header.temp_water),
-        temp_ambient: header.temp_ambient === '' ? null : Number(header.temp_ambient),
         temp_pulp: header.temp_pulp === '' ? null : Number(header.temp_pulp),
         notes: header.notes || null,
-        metrics: values,
+        metrics: metricsOut,
         photos,
         assignment_id: task.id || null,
         arrival_id: task.arrival_id || null,
@@ -473,7 +487,9 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
 
   const renderField = (f) => {
     const type = f.field_type || f.value_type || 'number'
-    const label = humanize(bareKey(f.key)) + (f.unit ? ` (${f.unit})` : '')
+    const gramsField = inGrams && f.unit === '%'
+    const label = humanize(bareKey(f.key)) + (gramsField ? ' (g)' : f.unit ? ` (${f.unit})` : '')
+    const sw = header.sample_weight_g === '' ? null : Number(header.sample_weight_g)
     return (
       <div key={f.key}>
         <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -492,7 +508,12 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
         ) : type === 'text' ? (
           <input className="input" value={values[f.key] ?? ''} onChange={e => setV(f.key, e.target.value)} />
         ) : (
-          <UnitField value={values[f.key] ?? ''} onChange={v => setV(f.key, v)} unit={f.unit || '%'} />
+          <UnitField value={values[f.key] ?? ''} onChange={v => setV(f.key, v)} unit={gramsField ? 'g' : (f.unit || '%')} />
+        )}
+        {gramsField && values[f.key] && sw > 0 && Number.isFinite(Number(values[f.key])) && (
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--accent-strong)', marginTop: 4 }}>
+            = {(Number(values[f.key]) / sw * 100).toFixed(2)}%
+          </div>
         )}
         <PhotoField fieldKey={f.key} urls={photos[f.key] || []} onChange={u => setP(f.key, u)} />
       </div>
@@ -533,8 +554,12 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
                 <input className="input" type="date" value={header.packaging_date} onChange={e => setH('packaging_date', e.target.value)} />
               </div>
               <div>
-                <label className="field-label">{t('cap.netWeight')}</label>
-                <UnitField value={header.net_weight} onChange={v => setH('net_weight', v)} unit="kg" />
+                <label className="field-label">{t('cap.netWeight')} (g)</label>
+                <UnitField value={header.net_weight} onChange={v => setH('net_weight', v)} unit="g" />
+              </div>
+              <div>
+                <label className="field-label">{t('cap.sampleWeight')} *</label>
+                <UnitField value={header.sample_weight_g} onChange={v => setH('sample_weight_g', v)} unit="g" />
               </div>
             </div>
           </SectionCard>
@@ -551,9 +576,7 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
             <div className="measure-group">
               <div className="measure-group-h"><Icon name="thermometer" size={15} style={{ color: 'var(--accent-strong)' }} />{t('cap.temp')}</div>
               <div className="measure-cols cols-3">
-                <div><label className="field-label">{t('cap.water')}</label><UnitField value={header.temp_water} onChange={v => setH('temp_water', v)} unit="°C" /></div>
-                <div><label className="field-label">{t('cap.ambient')}</label><UnitField value={header.temp_ambient} onChange={v => setH('temp_ambient', v)} unit="°C" /></div>
-                <div><label className="field-label">{t('cap.pulp')}</label><UnitField value={header.temp_pulp} onChange={v => setH('temp_pulp', v)} unit="°C" /></div>
+                <div><label className="field-label">{t('cap.pulp')} *</label><UnitField value={header.temp_pulp} onChange={v => setH('temp_pulp', v)} unit="°C" /></div>
               </div>
             </div>
             <div className="measure-group">
@@ -571,12 +594,22 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
             ) : fields.length === 0 ? (
               <div className="empty" style={{ padding: 32 }}>{t('cap.noTpl')}</div>
             ) : (
-              Object.entries(grouped).map(([fam, fs]) => (
+              <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700 }}>{t('cap.defectMode')}</span>
+                <div className="seg">
+                  <button type="button" className={inGrams ? 'on' : ''} onClick={() => setInGrams(true)}>g</button>
+                  <button type="button" className={!inGrams ? 'on' : ''} onClick={() => setInGrams(false)}>%</button>
+                </div>
+                {inGrams && <span style={{ fontSize: 11.5, color: 'var(--text-faint)' }}>{t('cap.defectModeHelp')}</span>}
+              </div>
+              {Object.entries(grouped).map(([fam, fs]) => (
                 <div className="measure-group" key={fam}>
                   <div className="measure-group-h"><Icon name={GROUP_ICON[fam] || GROUP_ICON._other} size={15} style={{ color: 'var(--accent-strong)' }} />{t('fam.' + fam)}</div>
                   <div className="form-grid">{fs.map(renderField)}</div>
                 </div>
-              ))
+              ))}
+              </>
             )}
           </SectionCard>
 
