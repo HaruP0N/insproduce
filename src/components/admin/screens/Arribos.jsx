@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import { Card, StatusBadge } from '@/components/proto/ui'
 import { Icon } from '@/components/proto/Icon'
 import { Modal, Field, ScreenState, RowAction, ConfirmDialog } from './_ui'
@@ -15,22 +15,74 @@ const api = async (path, opts = {}) => {
 
 const EMPTY = {
   container: '', commodity_code: 'BLUEBERRY', warehouse: '', carrier_type: 'Marítimo',
-  vessel: '', arrival_date: '', warehouse_date: '', week_no: '', cartons: '',
+  vessel: '', airline: '', arrival_date: '', warehouse_date: '', week_no: '', cartons: '',
   atmosphere: '', o2_pct: '', co2_pct: '', upc: '', fumigation: false, notes: '',
+  order_number: '', shipper: '', packaging: '', label: '', client: '', grower: '',
+  destination: '', packing_date: '', inspection_date: '',
 }
+const EMPTY_ROW = { pallet: '', lot: '', producer: '', variety: '' }
+const NOTE_TYPES = ['Quality & Condition', 'Temperature', 'Traceability', 'Package', 'Temperature Record']
+const DATE_KEYS = ['arrival_date', 'warehouse_date', 'packing_date', 'inspection_date']
 
-function NuevoArribo({ onClose, onSaved, onToast }) {
+// Paso 1: info general del cargo (la que llega semanas antes del contenedor).
+// Paso 2 (solo al crear): precarga de pallets + asignación opcional a un inspector.
+function ArriboWizard({ onClose, onSaved, onToast, edit }) {
   const { t } = useI18n()
-  const [form, setForm] = useState(EMPTY)
+  const [form, setForm] = useState(() => {
+    if (!edit) return EMPTY
+    const f = { ...EMPTY }
+    for (const k of Object.keys(EMPTY)) {
+      let v = edit[k]
+      if (v == null || v === undefined) continue
+      if (DATE_KEYS.includes(k)) v = String(v).slice(0, 10)
+      f[k] = k === 'fumigation' ? !!v : String(v)
+    }
+    f.fumigation = !!edit.fumigation
+    return f
+  })
+  const [step, setStep] = useState(1)
+  const [rows, setRows] = useState([{ ...EMPTY_ROW }])
+  const [inspEmail, setInspEmail] = useState('')
+  const [inspectores, setInspectores] = useState([])
   const [busy, setBusy] = useState(false)
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }))
+  const setRow = (i, k, v) => setRows((p) => p.map((r, j) => (j === i ? { ...r, [k]: v } : r)))
+
+  useEffect(() => {
+    if (edit) return
+    api('/api/users/inspectores').then((d) => setInspectores(Array.isArray(d) ? d : [])).catch(() => {})
+  }, [edit])
+
+  const filledRows = rows.filter((r) => r.lot.trim() && r.producer.trim())
 
   const submit = async () => {
     if (!form.container.trim()) return onToast({ title: t('arr.needContainer'), bad: true })
+    if (!edit && filledRows.length && !inspEmail)
+      return onToast({ title: t('arr.needInspectorRows'), bad: true })
     setBusy(true)
     try {
-      await api('/api/arrivals', { method: 'POST', body: JSON.stringify(form) })
-      onToast({ title: t('arr.created') })
+      let arrivalId = edit?.id
+      if (edit) {
+        await api(`/api/arrivals/${edit.id}`, { method: 'PUT', body: JSON.stringify(form) })
+      } else {
+        const d = await api('/api/arrivals', { method: 'POST', body: JSON.stringify(form) })
+        arrivalId = d.id
+        // precarga: una asignación pendiente por pallet (el inspector la ve con todo prellenado)
+        for (const r of filledRows) {
+          await api('/api/inspecciones/asignar', {
+            method: 'POST',
+            body: JSON.stringify({
+              lot: r.lot, producer: r.producer, variety: r.variety || null,
+              commodity: form.commodity_code, inspector_email: inspEmail,
+              pallet_number: r.pallet || null, arrival_id: arrivalId,
+            }),
+          })
+        }
+      }
+      onToast({
+        title: edit ? t('arr.updated') : t('arr.created'),
+        sub: !edit && filledRows.length ? t('arr.palletsAssigned', { n: filledRows.length }) : undefined,
+      })
       onSaved()
     } catch (e) {
       onToast({ title: t('arr.errSave'), sub: e.message, bad: true })
@@ -39,63 +91,107 @@ function NuevoArribo({ onClose, onSaved, onToast }) {
     }
   }
 
+  const groupTitle = (txt) => (
+    <div style={{ gridColumn: '1 / -1', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--text-faint)', borderBottom: '1px solid var(--border)', paddingBottom: 4, margin: '8px 0 2px' }}>{txt}</div>
+  )
+  const inp = (k, props = {}) => <input className="input" value={form[k]} onChange={(e) => set(k, e.target.value)} {...props} />
+
   return (
-    <Modal title={t('arr.new')} icon="package" onClose={onClose}
+    <Modal title={`${edit ? t('arr.edit') : t('arr.new')} — ${step === 1 ? t('arr.step1') : t('arr.step2')}`} icon="package" onClose={onClose} size="lg"
       footer={<>
         <button className="btn" onClick={onClose} disabled={busy}>{t('common.cancel')}</button>
-        <button className="btn btn-primary" onClick={submit} disabled={busy}>
-          <Icon name="check" size={15} />{busy ? t('common.saving') : t('common.save')}
-        </button>
+        {!edit && step === 2 && (
+          <button className="btn" onClick={() => setStep(1)} disabled={busy}><Icon name="chevLeft" size={14} />{t('arr.backStep')}</button>
+        )}
+        {!edit && step === 1 ? (
+          <button className="btn btn-primary" onClick={() => setStep(2)} disabled={busy}>
+            {t('arr.next')} <Icon name="chevRight" size={14} />
+          </button>
+        ) : (
+          <button className="btn btn-primary" onClick={submit} disabled={busy}>
+            <Icon name="check" size={15} />{busy ? t('common.saving') : t('common.save')}
+          </button>
+        )}
       </>}>
-      <div className="form-grid" style={{ gap: '0 14px' }}>
-        <Field label={t('arr.container')} required>
-          <input className="input" value={form.container} onChange={(e) => set('container', e.target.value)} placeholder="ZMOU5555481" />
-        </Field>
-        <Field label={t('arr.warehouse')}>
-          <input className="input" value={form.warehouse} onChange={(e) => set('warehouse', e.target.value)} placeholder="Four Seasons" />
-        </Field>
-        <Field label={t('arr.carrier')}>
-          <select className="select" value={form.carrier_type} onChange={(e) => set('carrier_type', e.target.value)}>
-            {['Marítimo', 'Aéreo', 'Terrestre'].map((c) => <option key={c}>{c}</option>)}
-          </select>
-        </Field>
-        <Field label={t('arr.vessel')}>
-          <input className="input" value={form.vessel} onChange={(e) => set('vessel', e.target.value)} />
-        </Field>
-        <Field label={t('arr.arrivalDate')}>
-          <input className="input" type="date" value={form.arrival_date} onChange={(e) => set('arrival_date', e.target.value)} />
-        </Field>
-        <Field label={t('arr.warehouseDate')}>
-          <input className="input" type="date" value={form.warehouse_date} onChange={(e) => set('warehouse_date', e.target.value)} />
-        </Field>
-        <Field label={t('arr.week')}>
-          <input className="input" type="number" value={form.week_no} onChange={(e) => set('week_no', e.target.value)} />
-        </Field>
-        <Field label={t('arr.cartons')}>
-          <input className="input" type="number" value={form.cartons} onChange={(e) => set('cartons', e.target.value)} />
-        </Field>
-        <Field label="UPC">
-          <input className="input" value={form.upc} onChange={(e) => set('upc', e.target.value)} />
-        </Field>
-        <Field label={t('arr.atmosphere')}>
-          <input className="input" value={form.atmosphere} onChange={(e) => set('atmosphere', e.target.value)} placeholder="AC" />
-        </Field>
-        <Field label="% O2">
-          <input className="input" type="number" step="0.01" value={form.o2_pct} onChange={(e) => set('o2_pct', e.target.value)} />
-        </Field>
-        <Field label="% CO2">
-          <input className="input" type="number" step="0.01" value={form.co2_pct} onChange={(e) => set('co2_pct', e.target.value)} />
-        </Field>
-      </div>
-      <Field label={t('arr.fumigation')}>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, cursor: 'pointer' }}>
-          <input type="checkbox" checked={form.fumigation} onChange={(e) => set('fumigation', e.target.checked)} />
-          {t('arr.fumigated')}
-        </label>
-      </Field>
-      <Field label={t('ni.notes')}>
-        <textarea className="input" rows={2} value={form.notes} onChange={(e) => set('notes', e.target.value)} />
-      </Field>
+      {step === 1 && (
+        <div className="form-grid" style={{ gap: '0 14px' }}>
+          {groupTitle(t('arr.grpCargo'))}
+          <Field label={t('arr.container')} required>{inp('container', { placeholder: 'CAAU4168542' })}</Field>
+          <Field label={t('arr.order')}>{inp('order_number')}</Field>
+          <Field label={t('arr.shipper')}>{inp('shipper', { placeholder: 'Family Tree Farms USA' })}</Field>
+          <Field label={t('arr.client')}>{inp('client')}</Field>
+          <Field label={t('arr.grower')}>{inp('grower')}</Field>
+          <Field label={t('arr.destination')}>{inp('destination', { placeholder: 'Philadelphia' })}</Field>
+          <Field label={t('arr.warehouse')}>{inp('warehouse', { placeholder: 'Four Seasons' })}</Field>
+          <Field label={t('arr.packagingField')}>{inp('packaging', { placeholder: '12 X 9.8 OZ' })}</Field>
+          <Field label={t('arr.cartons')}>{inp('cartons', { type: 'number' })}</Field>
+
+          {groupTitle(t('arr.grpTransport'))}
+          <Field label={t('arr.carrier')}>
+            <select className="select" value={form.carrier_type} onChange={(e) => set('carrier_type', e.target.value)}>
+              {['Marítimo', 'Aéreo', 'Terrestre'].map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </Field>
+          <Field label={t('arr.vessel')}>{inp('vessel')}</Field>
+          <Field label={t('arr.airline')}>{inp('airline')}</Field>
+          <Field label={t('arr.labelField')}>{inp('label', { placeholder: 'FTF' })}</Field>
+          <Field label="UPC">{inp('upc')}</Field>
+          <Field label={t('arr.atmosphere')}>{inp('atmosphere', { placeholder: 'AC' })}</Field>
+          <Field label="% O2">{inp('o2_pct', { type: 'number', step: '0.01' })}</Field>
+          <Field label="% CO2">{inp('co2_pct', { type: 'number', step: '0.01' })}</Field>
+          <Field label={t('arr.fumigation')}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, cursor: 'pointer', paddingTop: 8 }}>
+              <input type="checkbox" checked={form.fumigation} onChange={(e) => set('fumigation', e.target.checked)} />
+              {t('arr.fumigated')}
+            </label>
+          </Field>
+
+          {groupTitle(t('arr.grpDates'))}
+          <Field label={t('arr.packingDate')}>{inp('packing_date', { type: 'date' })}</Field>
+          <Field label={t('arr.arrivalDate')}>{inp('arrival_date', { type: 'date' })}</Field>
+          <Field label={t('arr.warehouseDate')}>{inp('warehouse_date', { type: 'date' })}</Field>
+          <Field label={t('arr.inspDate')}>{inp('inspection_date', { type: 'date' })}</Field>
+          <Field label={t('arr.week')}>{inp('week_no', { type: 'number' })}</Field>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <Field label={t('ni.notes')}>
+              <textarea className="input" rows={2} value={form.notes} onChange={(e) => set('notes', e.target.value)} />
+            </Field>
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div>
+          <div className="form-help" style={{ marginBottom: 12 }}>{t('arr.palletsPreloadHelp')}</div>
+          <Field label={t('arr.assignTo')}>
+            <select className="select" value={inspEmail} onChange={(e) => setInspEmail(e.target.value)}>
+              <option value="">{t('arr.noAssign')}</option>
+              {inspectores.map((u) => <option key={u.email} value={u.email}>{u.name} · {u.email}</option>)}
+            </select>
+          </Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr 1fr 34px', gap: 6, alignItems: 'center', marginTop: 10 }}>
+            {[t('ni.pallet'), t('tbl.lote'), t('tbl.productor'), t('tbl.variedad'), ''].map((h) => (
+              <div key={h} style={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)' }}>{h}</div>
+            ))}
+            {rows.map((r, i) => (
+              <Fragment key={i}>
+                <input className="input mono" value={r.pallet} onChange={(e) => setRow(i, 'pallet', e.target.value)} placeholder={`P${i + 1}`} />
+                <input className="input mono" value={r.lot} onChange={(e) => setRow(i, 'lot', e.target.value)} placeholder="2504895" />
+                <input className="input" value={r.producer} onChange={(e) => setRow(i, 'producer', e.target.value)} />
+                <input className="input" value={r.variety} onChange={(e) => setRow(i, 'variety', e.target.value)} />
+                <button className="btn btn-icon btn-sm" title={t('common.delete')} onClick={() => setRows((p) => p.filter((_, j) => j !== i))} disabled={rows.length === 1}>
+                  <Icon name="x" size={13} />
+                </button>
+              </Fragment>
+            ))}
+          </div>
+          <button className="btn btn-sm" style={{ marginTop: 10 }}
+            onClick={() => setRows((p) => [...p, { ...EMPTY_ROW, pallet: `P${p.length + 1}`, lot: p[p.length - 1]?.lot || '', producer: p[p.length - 1]?.producer || '', variety: p[p.length - 1]?.variety || '' }])}>
+            <Icon name="plus" size={13} /> {t('arr.addPallet')}
+          </button>
+          <div className="form-help" style={{ marginTop: 10 }}>{t('arr.palletsSkipHelp')}</div>
+        </div>
+      )}
     </Modal>
   )
 }
@@ -104,20 +200,81 @@ function DetalleArribo({ id, onToast, onAddInspection, onReinspect, onBack }) {
   const { t, lang } = useI18n()
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
+  const [editOpen, setEditOpen] = useState(false)
+  const [noteDraft, setNoteDraft] = useState({})
+  const [savingNotes, setSavingNotes] = useState(false)
+  const [uploading, setUploading] = useState(false)
 
   const load = useCallback(() => {
-    api(`/api/arrivals/${id}`).then(setData).catch((e) => setError(e.message))
+    api(`/api/arrivals/${id}`).then((d) => {
+      setData(d)
+      const draft = {}
+      for (const ty of NOTE_TYPES) draft[ty] = (d.notes_typed || []).find((n) => n.note_type === ty)?.note || ''
+      setNoteDraft(draft)
+    }).catch((e) => setError(e.message))
   }, [id])
   useEffect(load, [load])
+
+  const saveNotes = async () => {
+    setSavingNotes(true)
+    try {
+      await api(`/api/arrivals/${id}/notes`, {
+        method: 'PUT',
+        body: JSON.stringify({ notes: NOTE_TYPES.map((ty) => ({ type: ty, note: noteDraft[ty] || '' })) }),
+      })
+      onToast({ title: t('arr.notesSaved') })
+      load()
+    } catch (e) {
+      onToast({ title: t('arr.errSave'), sub: e.message, bad: true })
+    } finally {
+      setSavingNotes(false)
+    }
+  }
+
+  const uploadFile = async (file) => {
+    if (!file) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch(`/api/arrivals/${id}/files`, { method: 'POST', credentials: 'include', body: fd })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d?.msg || 'Error')
+      onToast({ title: t('arr.fileUploaded'), sub: file.name })
+      load()
+    } catch (e) {
+      onToast({ title: t('arr.errSave'), sub: e.message, bad: true })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const removeFile = async (fid) => {
+    try {
+      await api(`/api/arrivals/${id}/files?file_id=${fid}`, { method: 'DELETE' })
+      onToast({ title: t('arr.fileDeleted') })
+      load()
+    } catch (e) {
+      onToast({ title: t('arr.errSave'), sub: e.message, bad: true })
+    }
+  }
 
   if (error) return <div className="empty"><div className="ei"><Icon name="xCircle" size={20} /></div>{error}</div>
   if (!data) return <div className="empty" style={{ padding: 30 }}><Icon name="clock" size={16} /> {t('common.loading')}</div>
 
-  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-CL') : '—')
+  // timeZone UTC: las DATE de SQL llegan como medianoche UTC y Chile las retrocedería un día
+  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-CL', { timeZone: 'UTC' }) : '—')
+  // los tres bloques del encabezado del reporte QC Inspec
   const meta = [
-    [t('arr.warehouse'), data.warehouse], [t('arr.carrier'), data.carrier_type],
-    [t('arr.arrivalDate'), fmtDate(data.arrival_date)], [t('arr.week'), data.week_no],
-    [t('arr.cartons'), data.cartons], ['UPC', data.upc],
+    [t('arr.shipper'), data.shipper], [t('arr.warehouse'), data.warehouse],
+    [t('arr.packagingField'), data.packaging], [t('arr.cartons'), data.cartons],
+    [t('arr.order'), data.order_number], [t('arr.grower'), data.grower],
+    [t('arr.client'), data.client], [t('arr.destination'), data.destination],
+    [t('arr.vessel'), data.vessel], [t('arr.airline'), data.airline],
+    [t('arr.carrier'), data.carrier_type], [t('arr.labelField'), data.label],
+    [t('arr.packingDate'), fmtDate(data.packing_date)], [t('arr.arrivalDate'), fmtDate(data.arrival_date)],
+    [t('arr.inspDate'), fmtDate(data.inspection_date)], [t('arr.week'), data.week_no],
+    [t('arr.atmosphere'), data.atmosphere], ['UPC', data.upc],
   ]
 
   return (
@@ -127,9 +284,17 @@ function DetalleArribo({ id, onToast, onAddInspection, onReinspect, onBack }) {
         {t('arr.detail')} · {data.container}
       </span>}
       action={
-        <button className="btn btn-primary btn-sm" onClick={() => onAddInspection(data)}>
-          <Icon name="plus" size={14} /> {t('arr.addInspection')}
-        </button>
+        <span style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}>
+          <a className="btn btn-sm" href={`/api/arrivals/${data.id}/pdf`} target="_blank" rel="noreferrer">
+            <Icon name="report" size={14} /> {t('arr.containerPdf')}
+          </a>
+          <button className="btn btn-sm" onClick={() => setEditOpen(true)}>
+            <Icon name="edit" size={14} /> {t('arr.edit')}
+          </button>
+          <button className="btn btn-primary btn-sm" onClick={() => onAddInspection(data)}>
+            <Icon name="plus" size={14} /> {t('arr.addInspection')}
+          </button>
+        </span>
       }>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 16 }}>
         {meta.map(([label, v]) => (
@@ -172,6 +337,68 @@ function DetalleArribo({ id, onToast, onAddInspection, onReinspect, onBack }) {
           )}
         </tbody>
       </table>
+
+      {(data.pending_assignments || []).length > 0 && (
+        <>
+          <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', margin: '18px 0 8px' }}>
+            {t('arr.pendingTitle')} ({data.pending_assignments.length})
+          </div>
+          <div className="form-help" style={{ marginBottom: 8 }}>{t('arr.pendingHelp')}</div>
+          <table className="tbl">
+            <thead><tr><th>{t('ni.pallet')}</th><th>{t('tbl.loteProductor')}</th><th>{t('tbl.variedad')}</th><th>{t('tbl.inspector')}</th></tr></thead>
+            <tbody>
+              {data.pending_assignments.map((a) => (
+                <tr key={a.id}>
+                  <td className="mono" style={{ fontWeight: 700 }}>{a.pallet_number || '—'}</td>
+                  <td><div className="cell-strong mono" style={{ fontSize: 12 }}>{a.lot}</div><div className="cell-dim">{a.producer}</div></td>
+                  <td style={{ color: 'var(--text-dim)' }}>{a.variety || '—'}</td>
+                  <td><span className="pill-tag"><Icon name="user" size={12} />{a.inspector_name || '—'}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', margin: '18px 0 8px' }}>
+        {t('arr.reportNotes')}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(340px, 100%), 1fr))', gap: 10 }}>
+        {NOTE_TYPES.map((ty) => (
+          <div key={ty}>
+            <label className="field-label">{ty}</label>
+            <textarea className="input" rows={2} value={noteDraft[ty] || ''}
+              onChange={(e) => setNoteDraft((p) => ({ ...p, [ty]: e.target.value }))} />
+          </div>
+        ))}
+      </div>
+      <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={saveNotes} disabled={savingNotes}>
+        <Icon name="check" size={13} /> {savingNotes ? t('common.saving') : t('arr.saveNotes')}
+      </button>
+
+      <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', margin: '18px 0 8px' }}>
+        {t('arr.files')}
+      </div>
+      <div className="form-help" style={{ marginBottom: 8 }}>{t('arr.filesHelp')}</div>
+      {(data.files || []).map((f) => (
+        <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+          <Icon name="report" size={14} />
+          <a href={f.url} target="_blank" rel="noreferrer" style={{ fontWeight: 600, textDecoration: 'underline', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.file_name}</a>
+          <span style={{ marginLeft: 'auto' }}>
+            <RowAction icon="trash" title={t('common.delete')} danger onClick={() => removeFile(f.id)} />
+          </span>
+        </div>
+      ))}
+      <label className="btn btn-sm" style={{ marginTop: 10, cursor: 'pointer' }}>
+        <Icon name="arrowUp" size={13} /> {uploading ? t('arr.uploading') : t('arr.upload')}
+        <input type="file" accept="application/pdf,image/*" style={{ display: 'none' }} disabled={uploading}
+          onChange={(e) => { uploadFile(e.target.files?.[0]); e.target.value = '' }} />
+      </label>
+
+      {editOpen && (
+        <ArriboWizard edit={data} onClose={() => setEditOpen(false)}
+          onSaved={() => { setEditOpen(false); load() }} onToast={onToast} />
+      )}
     </Card>
   )
 }
@@ -204,7 +431,7 @@ export default function ArribosScreen({ onToast, onAddInspection, onReinspect })
     }
   }
 
-  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-CL') : '—')
+  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-CL', { timeZone: 'UTC' }) : '—')
 
   return (
     <div className="content-inner fade-up">
@@ -252,7 +479,7 @@ export default function ArribosScreen({ onToast, onAddInspection, onReinspect })
         </Card>
       )}
 
-      {showNew && <NuevoArribo onClose={() => setShowNew(false)} onSaved={() => { setShowNew(false); load() }} onToast={onToast} />}
+      {showNew && <ArriboWizard onClose={() => setShowNew(false)} onSaved={() => { setShowNew(false); load() }} onToast={onToast} />}
       {toDelete && (
         <ConfirmDialog title={t('arr.deleteTitle')} message={t('arr.deleteMsg', { c: toDelete.container })}
           confirmLabel={t('common.delete')} danger busy={busy}

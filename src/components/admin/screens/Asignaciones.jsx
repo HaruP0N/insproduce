@@ -10,7 +10,7 @@ import { listPendientes, createAssignment, setAssignmentStatus, deleteAssignment
 
 function AssignModal({ inspectores, commodities, onClose, onSaved, onToast }) {
   const { t } = useI18n()
-  const [form, setForm] = useState({ inspector_email: inspectores[0]?.email || '', commodity: commodities[0]?.code || '', lot: '', producer: '', variety: '' })
+  const [form, setForm] = useState({ inspector_email: inspectores[0]?.email || '', commodity: commodities[0]?.code || '', lot: '', producer: '', variety: '', pallet_number: '' })
   const [busy, setBusy] = useState(false)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -45,6 +45,7 @@ function AssignModal({ inspectores, commodities, onClose, onSaved, onToast }) {
       </Field>
       <div className="form-grid">
         <Field label={t('tbl.lote')} required><input className="input mono" value={form.lot} onChange={e => set('lot', e.target.value)} placeholder={t('asg.lotPh')} /></Field>
+        <Field label={t('ni.pallet')}><input className="input mono" value={form.pallet_number} onChange={e => set('pallet_number', e.target.value)} placeholder="P1" /></Field>
         <Field label={t('tbl.variedad')}><input className="input" value={form.variety} onChange={e => set('variety', e.target.value)} placeholder="Duke, Ventura…" /></Field>
       </div>
       <Field label={t('tbl.productor')} required><input className="input" value={form.producer} onChange={e => set('producer', e.target.value)} placeholder={t('asg.producerPh')} /></Field>

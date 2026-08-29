@@ -8,7 +8,7 @@ export async function GET(req) {
   if (auth.response) return auth.response
   try {
     const r = await query(
-      `SELECT a.id, a.created_at, a.producer, a.lot, a.variety,
+      `SELECT a.id, a.created_at, a.producer, a.lot, a.variety, a.pallet_number, a.arrival_id,
               c.code AS commodity_code, a.status, a.instructions AS notes_admin
        FROM qc.assignments a
        LEFT JOIN qc.commodities c ON c.id = a.commodity_id

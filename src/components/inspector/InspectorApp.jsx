@@ -388,7 +388,7 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
   const c = commodityVisual(task.commodity_code, t)
   const [fields, setFields] = useState([])
   const [loadingTpl, setLoadingTpl] = useState(true)
-  const [header, setHeader] = useState(EMPTY_HEADER)
+  const [header, setHeader] = useState(() => ({ ...EMPTY_HEADER, pallet_number: task.pallet || '' }))
   const [values, setValues] = useState({})
   const [photos, setPhotos] = useState({})
   const [saving, setSaving] = useState(false)
@@ -447,6 +447,7 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
         metrics: values,
         photos,
         assignment_id: task.id || null,
+        arrival_id: task.arrival_id || null,
       }
       const res = await saveInspection(payload)
       const id = res.id
@@ -506,7 +507,7 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
           <div className={'commodity-ico ' + c.key} style={{ width: 40, height: 40 }}><Icon name={c.icon} size={21} /></div>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.label} <span className="mono" style={{ color: 'var(--text-faint)', fontSize: 14.5 }}>· {task.lote}</span></div>
-            <div style={{ fontSize: 12.5, color: 'var(--text-faint)' }}>{task.productor} · {task.variedad}</div>
+            <div style={{ fontSize: 12.5, color: 'var(--text-faint)' }}>{task.productor} · {task.variedad}{task.pallet ? <span style={{ color: 'var(--accent)', fontWeight: 700 }}> · {task.pallet}</span> : ''}</div>
           </div>
         </div>
         <span className="badge neutral" style={{ marginLeft: 'auto' }}><Icon name="clipboardCheck" size={13} />{t('cap.inProgress')}</span>

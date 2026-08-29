@@ -6,7 +6,7 @@ const ALLOWED = ['pendiente', 'completada', 'cancelada']
 
 export async function listPendientes() {
   const r = await query(
-    `SELECT a.id, a.created_at, a.producer, a.lot, a.variety, c.code AS commodity_code,
+    `SELECT a.id, a.created_at, a.producer, a.lot, a.variety, a.pallet_number, a.arrival_id, c.code AS commodity_code,
             a.status, a.instructions AS notes_admin,
             u.id AS inspector_id, u.name AS inspector_name, u.email AS inspector_email
      FROM qc.assignments a
@@ -47,7 +47,7 @@ export async function cancelAssignment(id, actorId) {
   if (!r.rowsAffected?.[0]) throw appError(404, 'Asignación no encontrada')
 }
 
-export async function createAssignment({ lot, producer, variety, commodity, inspector_email }, actorId) {
+export async function createAssignment({ lot, producer, variety, commodity, inspector_email, pallet_number, arrival_id, instructions }, actorId) {
   if (!lot || !producer) throw appError(400, 'Lote y Productor son obligatorios')
   if (!inspector_email) throw appError(400, 'Debes seleccionar un inspector')
 
@@ -68,10 +68,13 @@ export async function createAssignment({ lot, producer, variety, commodity, insp
     const r = await txRequest(tx, {
       uid: inspectorId, lid: lotId, cid: commodityRow?.id ?? null,
       producer: String(producer).trim(), lot: String(lot).trim(),
-      variety: variety ? String(variety).trim() : null
+      variety: variety ? String(variety).trim() : null,
+      pallet: pallet_number ? String(pallet_number).trim().slice(0, 50) : null,
+      arrival: arrival_id ? Number(arrival_id) : null,
+      instr: instructions ? String(instructions).trim() : null,
     }).query(
-      `INSERT INTO qc.assignments (user_id, lot_id, commodity_id, producer, lot, variety, status)
-       OUTPUT INSERTED.id VALUES (@uid, @lid, @cid, @producer, @lot, @variety, 'pendiente')`)
+      `INSERT INTO qc.assignments (user_id, lot_id, commodity_id, producer, lot, variety, pallet_number, arrival_id, instructions, status)
+       OUTPUT INSERTED.id VALUES (@uid, @lid, @cid, @producer, @lot, @variety, @pallet, @arrival, @instr, 'pendiente')`)
     return r.recordset[0].id
   }, { actorId })
 }

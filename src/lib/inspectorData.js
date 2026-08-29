@@ -45,6 +45,8 @@ export async function getAssigned() {
     productor: a.producer || 'Sin productor',
     variedad: a.variety || '—',
     commodity_code: a.commodity_code || null,
+    pallet: a.pallet_number || null,
+    arrival_id: a.arrival_id || null,
     asignada: fechaCorta(a.created_at),
     notasAdmin: a.notes_admin || null,
   }))
