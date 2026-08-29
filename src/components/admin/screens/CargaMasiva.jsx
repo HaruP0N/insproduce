@@ -49,6 +49,13 @@ export default function CargaMasivaScreen({ onToast, onDone }) {
       const raw = XLSX.utils.sheet_to_json(sheet, { defval: '' })
         .filter(r => !String(r[HEADER_COLUMNS[0].es] ?? r[HEADER_COLUMNS[0].en] ?? '')
           .toUpperCase().startsWith(lang === 'en' ? 'EXAMPLE' : 'EJEMPLO'))
+      // el Shipping Detail Report (manifiesto de contenedor) no va aquí: va en Arribos
+      const first = raw.find(r => r && typeof r === 'object') || {}
+      if ('growerblockid' in first && 'pallet' in first) {
+        onToast({ title: t('bulk.isManifest'), sub: t('bulk.isManifestSub'), bad: true })
+        setFile(null); setParsed(null)
+        return
+      }
       setParsed(parseBulkRows(raw, fields, code))
     } catch (e) {
       onToast({ title: t('bulk.errRead'), sub: e.message, bad: true })

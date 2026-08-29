@@ -56,6 +56,8 @@ export const DICT = {
   'bulk.someFailed': { es: '{n} filas fallaron', en: '{n} rows failed' },
   'bulk.another': { es: 'Cargar otro archivo', en: 'Upload another file' },
   'bulk.errRead': { es: 'No se pudo leer el archivo', en: 'Could not read the file' },
+  'bulk.isManifest': { es: 'Este archivo es un manifiesto de contenedor', en: 'This file is a container manifest' },
+  'bulk.isManifestSub': { es: 'Es el Shipping Detail Report: súbelo en Arribos (nuevo arribo → paso 2, o en el detalle del contenedor). Aquí va la plantilla de inspecciones.', en: 'It is the Shipping Detail Report: upload it in Arrivals (new arrival → step 2, or in the container detail). This screen expects the inspections template.' },
   'bulk.errImport': { es: 'Error al importar', en: 'Import error' },
   'bulk.howTitle': { es: 'Cómo funciona', en: 'How it works' },
   'bulk.step1': { es: 'Elige el commodity y descarga la plantilla (trae las columnas de sus métricas).', en: 'Pick the commodity and download the template (it includes its metric columns).' },
