@@ -99,8 +99,12 @@ function QueueScreen({ assigned, loading, onStart }) {
                 <div className="task-top">
                   <div className={'commodity-ico ' + c.key}><Icon name={c.icon} size={22} /></div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="task-lote">{task.lote}</div>
-                    <div className="task-prod">{task.productor}</div>
+                    <div className="task-lote">
+                      {task.pallet
+                        ? <>Pallet <span style={{ color: 'var(--accent-strong)' }}>{task.pallet}</span></>
+                        : task.lote}
+                    </div>
+                    <div className="task-prod">{task.pallet ? `${task.lote} · ${task.productor}` : task.productor}</div>
                   </div>
                 </div>
                 <div className="task-meta">
@@ -526,12 +530,8 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
       // PDF del informe en segundo plano (no bloquea el guardado)
       fetch(`/api/inspecciones/${id}/generar-pdf`, { method: 'POST', credentials: 'include' }).catch(() => {})
       if (andNext) {
-        // mismo lote, siguiente pallet: se conserva la cabecera y se limpian métricas y fotos
-        setHeader(p => ({ ...p, pallet_number: nextPalletCode(p.pallet_number), ten_pieces_weight: '' }))
-        setSampleWeights(['']); setBaxloReadings([''])
-        setValues({}); setPhotos({})
-        window.scrollTo({ top: 0, behavior: 'smooth' })
-        onSaveNext?.({ id, lote: task.lote })
+        // el padre abre el selector de pallets pendientes: el inspector elige cuál sigue
+        onSaveNext?.({ id, lote: task.lote, pallet: header.pallet_number, taskId: task.id })
         return
       }
       let resolucion = null
@@ -702,28 +702,46 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
 
           <SectionCard n="4" icon="camera" title={`${t('cap.photoSet')} · ${PHOTO_SET.filter((p) => (photos[photoSetKey(p.tag)] || []).length > 0).length}/18`} sub={t('cap.photoSetSub')}>
             {['general', 'variety'].map((g) => (
-              <div key={g} style={{ marginBottom: g === 'general' ? 12 : 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 6 }}>
+              <div key={g} style={{ marginBottom: g === 'general' ? 14 : 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 8 }}>
                   {g === 'general' ? t('ni.photoSetGeneral') : t('ni.photoSetVariety')}
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100px, 30%), 1fr))', gap: 10 }}>
                   {PHOTO_SET.filter((p) => p.group === g).map((p) => {
-                    const n = (photos[photoSetKey(p.tag)] || []).length
+                    const urls = photos[photoSetKey(p.tag)] || []
                     const open = openSlot === p.tag
                     return (
-                      <button key={p.tag} type="button" onClick={() => setOpenSlot(open ? null : p.tag)}
-                        style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999,
-                          fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
-                          border: '1.5px solid ' + (open || n ? 'var(--accent-strong)' : 'var(--border)'),
-                          background: n ? 'var(--accent-strong)' : open ? 'var(--surface-2, rgba(99,102,241,.08))' : 'transparent',
-                          color: n ? '#fff' : 'var(--text-dim)',
-                        }}>
-                        <span style={{ fontWeight: 800 }}>{p.n}</span>
-                        {lang === 'en' ? p.en : p.es}
-                        <Icon name="camera" size={12} />
-                        {n > 0 && <span style={{ fontWeight: 800 }}>{n}</span>}
-                      </button>
+                      <div key={p.tag} style={{ minWidth: 0 }}>
+                        <button type="button" onClick={() => setOpenSlot(open ? null : p.tag)}
+                          style={{
+                            width: '100%', aspectRatio: '4 / 3', borderRadius: 10, cursor: 'pointer', position: 'relative',
+                            overflow: 'hidden', padding: 0, display: 'block',
+                            border: open ? '2px solid var(--accent-strong)' : urls.length ? '1.5px solid var(--accent-strong)' : '1.5px dashed var(--border)',
+                            background: urls.length ? '#000' : 'var(--surface-2, rgba(0,0,0,.02))',
+                          }}>
+                          {urls.length > 0 ? (
+                            <img src={urls[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: 0.92 }} />
+                          ) : (
+                            <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)' }}>
+                              <Icon name="camera" size={20} />
+                            </span>
+                          )}
+                          <span style={{
+                            position: 'absolute', top: 5, left: 5, width: 20, height: 20, borderRadius: 6,
+                            background: urls.length ? 'var(--accent-strong)' : 'rgba(127,127,127,.25)',
+                            color: urls.length ? '#fff' : 'var(--text-dim)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800,
+                          }}>{p.n}</span>
+                          {urls.length > 1 && (
+                            <span style={{ position: 'absolute', bottom: 5, right: 5, background: 'rgba(0,0,0,.65)', color: '#fff', borderRadius: 999, padding: '1px 7px', fontSize: 10.5, fontWeight: 800 }}>
+                              {urls.length}
+                            </span>
+                          )}
+                        </button>
+                        <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-dim)', marginTop: 4, lineHeight: 1.25, textAlign: 'center' }}>
+                          {lang === 'en' ? p.en : p.es}
+                        </div>
+                      </div>
                     )
                   })}
                 </div>
@@ -810,6 +828,17 @@ export default function InspectorApp() {
 
   useEffect(() => { getMe().then(setUser).catch(() => {}); loadAssigned(); loadCompleted() }, [loadAssigned, loadCompleted])
 
+  const [pickNext, setPickNext] = useState(false)
+
+  const onSavedNext = (r) => {
+    setCapture(null)
+    // sacar la tarea recién guardada de inmediato (el refetch confirma después)
+    setAssigned((prev) => prev.filter((x) => x.id !== r.taskId))
+    loadAssigned(); loadCompleted()
+    showToast({ title: t('cap.savedNext'), sub: `${r.pallet || r.lote} · ID ${r.id}` })
+    setPickNext(true)
+  }
+
   const onSaved = (record) => {
     setCapture(null)
     setTab('completadas')
@@ -824,11 +853,33 @@ export default function InspectorApp() {
       {!capture && <InspTopBar tab={tab} onTab={setTab} assignedCount={assigned.length} user={user} theme={theme} onTheme={() => setTheme(th => th === 'dark' ? 'light' : 'dark')} onLogout={logout} />}
       <div className="insp-content">
         {capture
-          ? <CaptureForm task={capture} onSave={onSaved} onSaveNext={(r) => { loadCompleted(); showToast({ title: t('cap.savedNext'), sub: `${r.lote} · ID ${r.id}` }) }} onCancel={() => setCapture(null)} onError={(m) => showToast({ title: t('common.error'), sub: m, bad: true })} />
+          ? <CaptureForm key={capture.id} task={capture} onSave={onSaved} onSaveNext={onSavedNext} onCancel={() => setCapture(null)} onError={(m) => showToast({ title: t('common.error'), sub: m, bad: true })} />
           : tab === 'asignadas'
             ? <QueueScreen assigned={assigned} loading={loadingA} onStart={setCapture} />
             : <CompletedScreen completed={completed} loading={loadingC} onOpen={setDrawer} />}
       </div>
+      {pickNext && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,18,30,.55)', zIndex: 90, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}
+          onClick={() => setPickNext(false)}>
+          <div className="card" style={{ maxWidth: 440, width: '100%', maxHeight: '80vh', overflow: 'auto', padding: 18 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>{t('cap.pickNextTitle')}</div>
+            <div style={{ fontSize: 12.5, color: 'var(--text-dim)', marginBottom: 14 }}>{t('cap.pickNextSub')}</div>
+            {assigned.length === 0 && <div className="empty" style={{ padding: 20 }}>{t('cap.noPending')}</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {assigned.map((task) => (
+                <button key={task.id} className="btn" style={{ width: '100%', justifyContent: 'space-between', display: 'flex', alignItems: 'center' }}
+                  onClick={() => { setPickNext(false); setCapture(task) }}>
+                  <span style={{ fontWeight: 800 }}>{task.pallet ? `Pallet ${task.pallet}` : task.lote}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{task.productor} · {task.variedad}</span>
+                </button>
+              ))}
+            </div>
+            <button className="btn" style={{ width: '100%', marginTop: 12 }} onClick={() => setPickNext(false)}>
+              {t('cap.pickLater')}
+            </button>
+          </div>
+        </div>
+      )}
       {drawer && <CompletedDrawer item={drawer} onClose={() => setDrawer(null)} />}
       {toast && (
         <div className="toast-wrap">

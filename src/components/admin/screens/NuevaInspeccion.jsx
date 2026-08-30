@@ -101,41 +101,56 @@ function WeightList({ label, help, list, setList, summary, badge, addLabel, t })
   )
 }
 
-// Set de fotos oficial FTF como checklist compacto: 18 chips numerados;
-// el uploader aparece solo al tocar un chip (chip lleno = ya tiene foto).
+// Set de fotos oficial FTF como el instructivo real: mosaico de tarjetas numeradas.
+// Vacía = cámara punteada; con foto = miniatura. Tocar abre el uploader del slot.
 function PhotoSetCard({ photos, setPhotos, saving, t, lang }) {
   const [openSlot, setOpenSlot] = useState(null)
   const taken = PHOTO_SET.filter((p) => (photos[photoSetKey(p.tag)] || []).length > 0).length
-  const chip = (p) => {
-    const n = (photos[photoSetKey(p.tag)] || []).length
+  const tile = (p) => {
+    const urls = photos[photoSetKey(p.tag)] || []
     const open = openSlot === p.tag
     return (
-      <button key={p.tag} type="button" onClick={() => setOpenSlot(open ? null : p.tag)}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 999,
-          fontSize: 12, fontWeight: 600, cursor: 'pointer',
-          border: '1.5px solid ' + (open ? 'var(--accent-strong)' : n ? 'var(--accent-strong)' : 'var(--border)'),
-          background: n ? 'var(--accent-strong)' : open ? 'var(--surface-2, rgba(99,102,241,.08))' : 'transparent',
-          color: n ? '#fff' : 'var(--text-dim)',
-        }}>
-        <span style={{ fontWeight: 800 }}>{p.n}</span>
-        {lang === 'en' ? p.en : p.es}
-        <Icon name="camera" size={12} />
-        {n > 0 && <span style={{ fontWeight: 800 }}>{n}</span>}
-      </button>
+      <div key={p.tag} style={{ minWidth: 0 }}>
+        <button type="button" onClick={() => setOpenSlot(open ? null : p.tag)}
+          style={{
+            width: '100%', aspectRatio: '4 / 3', borderRadius: 10, cursor: 'pointer', position: 'relative',
+            overflow: 'hidden', padding: 0, display: 'block',
+            border: open ? '2px solid var(--accent-strong)' : urls.length ? '1.5px solid var(--accent-strong)' : '1.5px dashed var(--border)',
+            background: urls.length ? '#000' : 'var(--surface-2, rgba(0,0,0,.02))',
+          }}>
+          {urls.length > 0 ? (
+            <img src={urls[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: 0.92 }} />
+          ) : (
+            <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)' }}>
+              <Icon name="camera" size={20} />
+            </span>
+          )}
+          <span style={{
+            position: 'absolute', top: 5, left: 5, width: 20, height: 20, borderRadius: 6,
+            background: urls.length ? 'var(--accent-strong)' : 'rgba(127,127,127,.25)',
+            color: urls.length ? '#fff' : 'var(--text-dim)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800,
+          }}>{p.n}</span>
+          {urls.length > 1 && (
+            <span style={{ position: 'absolute', bottom: 5, right: 5, background: 'rgba(0,0,0,.65)', color: '#fff', borderRadius: 999, padding: '1px 7px', fontSize: 10.5, fontWeight: 800 }}>
+              {urls.length}
+            </span>
+          )}
+        </button>
+        <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-dim)', marginTop: 4, lineHeight: 1.25, textAlign: 'center' }}>
+          {lang === 'en' ? p.en : p.es}
+        </div>
+      </div>
     )
   }
   const openItem = PHOTO_SET.find((p) => p.tag === openSlot)
+  const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(108px, 30%), 1fr))', gap: 10 }
   return (
     <Card title={`${t('ni.photoSet')} · ${taken}/18`} sub={t('ni.photoSetSub')} style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 6 }}>{t('ni.photoSetGeneral')}</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 12 }}>
-        {PHOTO_SET.filter((p) => p.group === 'general').map(chip)}
-      </div>
-      <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 6 }}>{t('ni.photoSetVariety')}</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-        {PHOTO_SET.filter((p) => p.group === 'variety').map(chip)}
-      </div>
+      <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 8 }}>{t('ni.photoSetGeneral')}</div>
+      <div style={{ ...grid, marginBottom: 14 }}>{PHOTO_SET.filter((p) => p.group === 'general').map(tile)}</div>
+      <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 8 }}>{t('ni.photoSetVariety')}</div>
+      <div style={grid}>{PHOTO_SET.filter((p) => p.group === 'variety').map(tile)}</div>
       {openItem && (
         <div style={{ marginTop: 12, padding: 12, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface-2, rgba(0,0,0,.02))' }}>
           <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 8 }}>
