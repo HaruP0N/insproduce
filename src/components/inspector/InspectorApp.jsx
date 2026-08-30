@@ -9,7 +9,7 @@ import { StatusBadge, ScoreCell } from '@/components/proto/ui'
 import { RES, RES_VAR, fmt1, fechaCorta } from '@/lib/proto'
 import { useI18n, LangToggle } from '@/lib/i18n'
 import { PHOTO_SET, photoSetKey } from '@/lib/photoSet'
-import { sumWeights, baxloStats } from '@/lib/sampling'
+import { sumWeights, baxloStats, numStats } from '@/lib/sampling'
 import { baxloClass } from '@/components/admin/screens/NuevaInspeccion'
 import { uploadToCloudinary, compressImage } from '@/lib/cloudinary'
 import {
@@ -433,17 +433,20 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
   const [openPhotoKey, setOpenPhotoKey] = useState(null) // uploader visible solo del defecto tocado
   const [sampleWeights, setSampleWeights] = useState(['']) // N muestras pesadas, se suman
   const [baxloReadings, setBaxloReadings] = useState(['']) // N lecturas → min/moda/máx
+  const [brixReadings, setBrixReadings] = useState(['']) // N lecturas → prom/mín/máx
 
   useEffect(() => {
     const total = sumWeights(sampleWeights)
     const st = baxloStats(baxloReadings)
+    const bx = numStats(brixReadings)
     setHeader((p) => ({
       ...p,
       sample_weight_g: total != null ? String(total) : '',
       baxlo_min: st ? String(st.min) : '', baxlo_mode: st ? String(st.mode) : '', baxlo_max: st ? String(st.max) : '',
+      brix_avg: bx ? String(bx.avg) : '', brix_min: bx ? String(bx.min) : '', brix_max: bx ? String(bx.max) : '',
     }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sampleWeights, baxloReadings])
+  }, [sampleWeights, baxloReadings, brixReadings])
 
   useEffect(() => {
     let alive = true
@@ -639,22 +642,28 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
           <SectionCard n="2" icon="thermometer" title={t('cap.s2')} sub={t('cap.s2sub')}>
             <div className="measure-group">
               <div className="measure-group-h"><Icon name="droplet" size={15} style={{ color: 'var(--accent-strong)' }} />{t('cap.brix')}</div>
-              <div className="measure-cols cols-3">
-                <div><label className="field-label">{t('cap.average')}</label><UnitField value={header.brix_avg} onChange={v => setH('brix_avg', v)} unit="°Bx" /></div>
-                <div><label className="field-label">{t('cap.min')}</label><UnitField value={header.brix_min} onChange={v => setH('brix_min', v)} unit="°Bx" /></div>
-                <div><label className="field-label">{t('cap.max')}</label><UnitField value={header.brix_max} onChange={v => setH('brix_max', v)} unit="°Bx" /></div>
+              <div className="measure-cols cols-2">
+                <div>
+                  <MiniList label={t('ni.brixReadings')} list={brixReadings} setList={setBrixReadings}
+                    addLabel={t('ni.addReading')}
+                    summary={header.brix_avg ? `${t('cap.average')} ${header.brix_avg} · Mín ${header.brix_min} · Máx ${header.brix_max} °Bx` : null} />
+                </div>
               </div>
             </div>
             <div className="measure-group">
               <div className="measure-group-h"><Icon name="thermometer" size={15} style={{ color: 'var(--accent-strong)' }} />{t('cap.temp')}</div>
               <div className="measure-cols cols-3">
                 <div><label className="field-label">{t('cap.pulp')} *</label><UnitField value={header.temp_pulp} onChange={v => setH('temp_pulp', v)} unit="°C" /></div>
-                <div>
-                  <MiniList label={t('ni.baxloReadings')} list={baxloReadings} setList={setBaxloReadings}
-                    addLabel={t('ni.addReading')}
-                    summary={header.baxlo_min ? `Min ${header.baxlo_min} · Moda ${header.baxlo_mode} · Máx ${header.baxlo_max}` : null}
-                    badge={baxloClass(header.baxlo_mode)} />
-                </div>
+              </div>
+            </div>
+
+            <div className="measure-group">
+              <div className="measure-group-h"><Icon name="scale" size={15} style={{ color: 'var(--accent-strong)' }} />Baxlo</div>
+              <div className="measure-cols cols-2">
+                <MiniList label={t('ni.baxloReadings')} list={baxloReadings} setList={setBaxloReadings}
+                  addLabel={t('ni.addReading')}
+                  summary={header.baxlo_min ? `Min ${header.baxlo_min} · Moda ${header.baxlo_mode} · Máx ${header.baxlo_max}` : null}
+                  badge={baxloClass(header.baxlo_mode)} />
               </div>
             </div>
             <div className="measure-group">

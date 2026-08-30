@@ -7,13 +7,13 @@ import ImageUploader from '@/components/ImageUploader'
 import { useI18n } from '@/lib/i18n'
 import { commodityVisual } from '@/lib/inspectorData'
 import { PHOTO_SET, photoSetKey } from '@/lib/photoSet'
-import { sumWeights, baxloStats } from '@/lib/sampling'
+import { sumWeights, baxloStats, numStats } from '@/lib/sampling'
 import { groupManifest } from '@/lib/manifest'
 
 const EMPTY_HEADER = {
   producer: '', lot: '', pallet_number: '', variety: '', caliber: '',
   packaging_code: '', packaging_type: '', packaging_date: '',
-  net_weight: '', sample_weight_g: '', ten_pieces_weight: '', brix_avg: '', baxlo_min: '', baxlo_mode: '', baxlo_max: '',
+  net_weight: '', sample_weight_g: '', ten_pieces_weight: '', brix_avg: '', brix_min: '', brix_max: '', baxlo_min: '', baxlo_mode: '', baxlo_max: '',
   temp_pulp: '', notes: '',
 }
 
@@ -166,6 +166,7 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
   const [donePallets, setDonePallets] = useState(() => new Set()) // guardados en esta sesión (multi-pallet)
   const [sampleWeights, setSampleWeights] = useState(['']) // se pesan N muestras y se SUMAN
   const [baxloReadings, setBaxloReadings] = useState(['']) // N lecturas → min/moda/máx automáticos
+  const [brixReadings, setBrixReadings] = useState(['']) // N lecturas → prom/mín/máx automáticos
   const [inGrams, setInGrams] = useState(true) // defectos en gramos → % automático con el peso muestra
 
   // Contexto desde Arribos: pre-carga commodity y, en reinspección, los datos del pallet
@@ -243,14 +244,18 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
   useEffect(() => {
     const total = sumWeights(sampleWeights)
     const st = baxloStats(baxloReadings)
+    const bx = numStats(brixReadings)
     setHeader((p) => ({
       ...p,
       sample_weight_g: total != null ? String(total) : '',
       baxlo_min: st ? String(st.min) : '',
       baxlo_mode: st ? String(st.mode) : '',
       baxlo_max: st ? String(st.max) : '',
+      brix_avg: bx ? String(bx.avg) : '',
+      brix_min: bx ? String(bx.min) : '',
+      brix_max: bx ? String(bx.max) : '',
     }))
-  }, [sampleWeights, baxloReadings])
+  }, [sampleWeights, baxloReadings, brixReadings])
 
   const grouped = useMemo(() => groupFields(fields), [fields])
 
@@ -306,6 +311,8 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
         sample_weight_g: num(header.sample_weight_g),
         ten_pieces_weight_g: num(header.ten_pieces_weight),
         brix_avg: num(header.brix_avg),
+        brix_min: num(header.brix_min),
+        brix_max: num(header.brix_max),
         temp_pulp: num(header.temp_pulp),
         baxlo_min: num(header.baxlo_min),
         baxlo_mode: num(header.baxlo_mode),
@@ -329,7 +336,7 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
       fetch(`/api/inspecciones/${data.id}/generar-pdf`, { method: 'POST', credentials: 'include' }).catch(() => {})
       if (andNext) {
         const savedPallet = header.pallet_number.trim()
-        setSampleWeights(['']); setBaxloReadings([''])
+        setSampleWeights(['']); setBaxloReadings(['']); setBrixReadings([''])
         setValues({}); setPhotos({})
         if (manifestGroups.length) {
           // siguiente pallet PENDIENTE del manifiesto, con su propio prellenado
@@ -514,8 +521,12 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
               </div>
               <div style={GRID3}>
                 {numberField('net_weight', 'ni.netWeight')}
-                {numberField('brix_avg', 'ni.brix')}
                 {numberField('temp_pulp', 'ni.tempPulp')}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(250px, 100%), 1fr))', gap: 12, alignItems: 'start', marginTop: 4 }}>
+                <WeightList label={t('ni.brixReadings')} help={t('ni.brixReadingsHelp')} list={brixReadings} setList={setBrixReadings}
+                  summary={header.brix_avg ? `${t('ni.brixAvgShort')} ${header.brix_avg} · Mín ${header.brix_min} · Máx ${header.brix_max} °Bx` : null}
+                  addLabel={t('ni.addReading')} t={t} />
               </div>
               <Field label={t('ni.notes')}>
                 <textarea className="input" rows={3} value={header.notes} onChange={setH('notes')} />

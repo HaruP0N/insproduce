@@ -19,3 +19,13 @@ export const baxloStats = (list) => {
   const mode = modes.sort((a, b) => Math.abs(a - mean) - Math.abs(b - mean))[0]
   return { min: Math.min(...n), max: Math.max(...n), mode, count: n.length }
 }
+
+export const numStats = (list) => {
+  const n = (list || []).map(Number).filter((v) => Number.isFinite(v) && v > 0)
+  if (!n.length) return null
+  return {
+    min: Math.min(...n), max: Math.max(...n),
+    avg: Math.round((n.reduce((a, b) => a + b, 0) / n.length) * 10) / 10,
+    count: n.length,
+  }
+}
