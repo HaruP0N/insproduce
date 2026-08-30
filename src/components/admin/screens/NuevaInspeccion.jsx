@@ -50,65 +50,87 @@ export function baxloClass(v) {
   return { label: 'Firme', bg: '#E3F2E8', fg: '#1D5E3A' }
 }
 
-// Lista dinámica de valores numéricos (pesos de muestra, lecturas Baxlo):
-// agregar cuantos se quiera; el resumen (suma o min/moda/máx) se calcula solo.
+// Lista dinámica de valores numéricos (pesos de muestra, lecturas Baxlo) en un
+// panel propio: filas alineadas, quitar solo cuando hay más de una, resumen abajo.
 function WeightList({ label, help, list, setList, summary, badge, addLabel, t }) {
   const setAt = (i, v) => setList((p) => p.map((x, j) => (j === i ? v : x)))
   const removeAt = (i) => setList((p) => (p.length === 1 ? [''] : p.filter((_, j) => j !== i)))
   return (
-    <div style={{ marginBottom: 14 }}>
-      <label className="field-label">{label}</label>
-      {help && <div className="form-help" style={{ marginTop: 0, marginBottom: 6 }}>{help}</div>}
+    <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'var(--surface-2, rgba(0,0,0,.02))', display: 'flex', flexDirection: 'column' }}>
+      <label className="field-label" style={{ marginBottom: 2 }}>{label}</label>
+      {help && <div style={{ fontSize: 11.5, color: 'var(--text-faint)', marginBottom: 8, lineHeight: 1.35 }}>{help}</div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {list.map((v, i) => (
           <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <input className="input" type="number" step="0.1" inputMode="decimal" value={v}
-              onChange={(e) => setAt(i, e.target.value)} style={{ flex: 1 }} />
-            <button type="button" className="btn btn-icon btn-sm" onClick={() => removeAt(i)} title={t('common.delete')}
-              disabled={list.length === 1 && !v}>
-              <Icon name="x" size={13} />
-            </button>
+              onChange={(e) => setAt(i, e.target.value)} style={{ flex: 1, minWidth: 0 }} />
+            {list.length > 1 && (
+              <button type="button" className="btn btn-icon btn-sm" onClick={() => removeAt(i)} title={t('common.delete')}>
+                <Icon name="x" size={13} />
+              </button>
+            )}
           </div>
         ))}
       </div>
-      <button type="button" className="btn btn-sm" style={{ marginTop: 6 }} onClick={() => setList((p) => [...p, ''])}>
-        <Icon name="plus" size={13} /> {addLabel}
-      </button>
-      {summary && (
-        <div style={{ marginTop: 7, fontSize: 12.5, fontWeight: 800, color: 'var(--accent-strong)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {summary}
-          {badge && <span style={{ background: badge.bg, color: badge.fg, padding: '1px 8px', borderRadius: 999, fontSize: 11, fontWeight: 800 }}>{badge.label}</span>}
-        </div>
-      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+        <button type="button" className="btn btn-sm" onClick={() => setList((p) => [...p, ''])}>
+          <Icon name="plus" size={13} /> {addLabel}
+        </button>
+        {summary && (
+          <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--accent-strong)', display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+            {summary}
+            {badge && <span style={{ background: badge.bg, color: badge.fg, padding: '1px 8px', borderRadius: 999, fontSize: 11, fontWeight: 800 }}>{badge.label}</span>}
+          </span>
+        )}
+      </div>
     </div>
   )
 }
 
-// Set de fotos oficial FTF: 7 generales (una vez por empaque) + 11 por variedad,
-// numeradas en el orden del instructivo "Photo Set for Inspection".
+// Set de fotos oficial FTF como checklist compacto: 18 chips numerados;
+// el uploader aparece solo al tocar un chip (chip lleno = ya tiene foto).
 function PhotoSetCard({ photos, setPhotos, saving, t, lang }) {
+  const [openSlot, setOpenSlot] = useState(null)
   const taken = PHOTO_SET.filter((p) => (photos[photoSetKey(p.tag)] || []).length > 0).length
-  const grp = (g) => PHOTO_SET.filter((p) => p.group === g)
-  const slot = (p) => (
-    <div key={p.tag} style={{ background: 'var(--surface-2, rgba(0,0,0,.02))', borderRadius: 10, padding: 10, border: '1px solid var(--border)' }}>
-      <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ width: 18, height: 18, borderRadius: '50%', background: (photos[photoSetKey(p.tag)] || []).length ? 'var(--accent-strong)' : 'var(--surface-2, rgba(0,0,0,.08))', color: (photos[photoSetKey(p.tag)] || []).length ? '#fff' : 'var(--text-faint)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10.5, fontWeight: 800, flexShrink: 0 }}>{p.n}</span>
+  const chip = (p) => {
+    const n = (photos[photoSetKey(p.tag)] || []).length
+    const open = openSlot === p.tag
+    return (
+      <button key={p.tag} type="button" onClick={() => setOpenSlot(open ? null : p.tag)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 999,
+          fontSize: 12, fontWeight: 600, cursor: 'pointer',
+          border: '1.5px solid ' + (open ? 'var(--accent-strong)' : n ? 'var(--accent-strong)' : 'var(--border)'),
+          background: n ? 'var(--accent-strong)' : open ? 'var(--surface-2, rgba(99,102,241,.08))' : 'transparent',
+          color: n ? '#fff' : 'var(--text-dim)',
+        }}>
+        <span style={{ fontWeight: 800 }}>{p.n}</span>
         {lang === 'en' ? p.en : p.es}
-      </label>
-      <ImageUploader fieldKey={photoSetKey(p.tag)} images={photos[photoSetKey(p.tag)] || []}
-        onChange={(urls) => setPhotos((prev) => ({ ...prev, [photoSetKey(p.tag)]: urls }))} maxImages={3} disabled={saving} />
-    </div>
-  )
+        <Icon name="camera" size={12} />
+        {n > 0 && <span style={{ fontWeight: 800 }}>{n}</span>}
+      </button>
+    )
+  }
+  const openItem = PHOTO_SET.find((p) => p.tag === openSlot)
   return (
     <Card title={`${t('ni.photoSet')} · ${taken}/18`} sub={t('ni.photoSetSub')} style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 8 }}>{t('ni.photoSetGeneral')}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(200px, 100%), 1fr))', gap: 10, marginBottom: 14 }}>
-        {grp('general').map(slot)}
+      <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 6 }}>{t('ni.photoSetGeneral')}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 12 }}>
+        {PHOTO_SET.filter((p) => p.group === 'general').map(chip)}
       </div>
-      <div style={{ fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 8 }}>{t('ni.photoSetVariety')}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(200px, 100%), 1fr))', gap: 10 }}>
-        {grp('variety').map(slot)}
+      <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 6 }}>{t('ni.photoSetVariety')}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+        {PHOTO_SET.filter((p) => p.group === 'variety').map(chip)}
       </div>
+      {openItem && (
+        <div style={{ marginTop: 12, padding: 12, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface-2, rgba(0,0,0,.02))' }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 8 }}>
+            {openItem.n}. {lang === 'en' ? openItem.en : openItem.es}
+          </div>
+          <ImageUploader fieldKey={photoSetKey(openItem.tag)} images={photos[photoSetKey(openItem.tag)] || []}
+            onChange={(urls) => setPhotos((prev) => ({ ...prev, [photoSetKey(openItem.tag)]: urls }))} maxImages={3} disabled={saving} />
+        </div>
+      )}
     </Card>
   )
 }
@@ -126,6 +148,7 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
   const [photos, setPhotos] = useState({})
   const [saving, setSaving] = useState(false)
   const [step, setStep] = useState(1) // 1 = datos iniciales (identificación), 2 = datos de la inspección
+  const [openPhotoKey, setOpenPhotoKey] = useState(null) // uploader visible solo del defecto tocado
   const [sampleWeights, setSampleWeights] = useState(['']) // se pesan N muestras y se SUMAN
   const [baxloReadings, setBaxloReadings] = useState(['']) // N lecturas → min/moda/máx automáticos
   const [inGrams, setInGrams] = useState(true) // defectos en gramos → % automático con el peso muestra
@@ -387,12 +410,14 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
           <div style={{ fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', borderBottom: '1px solid var(--border)', padding: '14px 0 4px', marginBottom: 10 }}>
             {t('ni.samplesTitle')}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap: '0 16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(250px, 100%), 1fr))', gap: 12, alignItems: 'start' }}>
             <WeightList label={t('ni.sampleWeights')} help={t('ni.sampleWeightsHelp')} list={sampleWeights} setList={setSampleWeights}
               summary={header.sample_weight_g ? `${t('ni.sampleTotal')}: ${header.sample_weight_g} g` : null} addLabel={t('ni.addWeight')} t={t} />
-            <Field label={t('ni.tenPieces')} help={t('ni.tenPiecesHelp')}>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'var(--surface-2, rgba(0,0,0,.02))' }}>
+              <label className="field-label" style={{ marginBottom: 2 }}>{t('ni.tenPieces')}</label>
+              <div style={{ fontSize: 11.5, color: 'var(--text-faint)', marginBottom: 8, lineHeight: 1.35 }}>{t('ni.tenPiecesHelp')}</div>
               <input className="input" type="number" step="0.1" value={header.ten_pieces_weight} onChange={setH('ten_pieces_weight')} placeholder="28" />
-            </Field>
+            </div>
             <WeightList label={t('ni.baxloReadings')} help={t('ni.baxloReadingsHelp')} list={baxloReadings} setList={setBaxloReadings}
               summary={header.baxlo_min ? `Min ${header.baxlo_min} · ${t('ni.baxloModeShort')} ${header.baxlo_mode} · Máx ${header.baxlo_max}` : null}
               badge={baxloClass(header.baxlo_mode)} addLabel={t('ni.addReading')} t={t} />
@@ -485,35 +510,43 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
           {Object.entries(grouped).map(([grp, grpFields]) => (
             <Card key={grp} title={t(`ni.group.${grp}`) === `ni.group.${grp}` ? humanize(grp) : t(`ni.group.${grp}`)}
               style={{ marginBottom: 16 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 14 }}>
-                {grpFields.map(f => (
-                  <div key={f.key} style={{ background: 'var(--surface-2, rgba(0,0,0,.02))', borderRadius: 10, padding: 12, border: '1px solid var(--border)' }}>
-                    <label className="field-label">
-                      {humanize(bareKey(f.key))}{f.unit === '%' && inGrams ? ' (g)' : f.unit ? ` (${f.unit})` : ''}{f.required ? ' *' : ''}
-                    </label>
-                    {f.field_type === 'select' ? (
-                      <select className="select" value={values[f.key] ?? ''} onChange={e => setValues(p => ({ ...p, [f.key]: e.target.value }))}>
-                        <option value="">--</option>
-                        {(f.options || []).map(op => <option key={op} value={op}>{op}</option>)}
-                      </select>
-                    ) : (
-                      <input className="input" type={f.field_type === 'number' ? 'number' : 'text'}
-                        step={f.field_type === 'number' ? '0.01' : undefined}
-                        min={f.min_value ?? undefined} max={f.max_value ?? undefined}
-                        value={values[f.key] ?? ''} onChange={e => setValues(p => ({ ...p, [f.key]: e.target.value }))} />
-                    )}
-                    {inGrams && f.unit === '%' && values[f.key] && num(header.sample_weight_g) > 0 && Number.isFinite(Number(values[f.key])) && (
-                      <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--accent-strong)', marginTop: 4 }}>
-                        = {(Number(values[f.key]) / num(header.sample_weight_g) * 100).toFixed(2)}%
+              {grpFields.map(f => {
+                const nPhotos = (photos[f.key] || []).length
+                const pct = inGrams && f.unit === '%' && values[f.key] && num(header.sample_weight_g) > 0 && Number.isFinite(Number(values[f.key]))
+                  ? (Number(values[f.key]) / num(header.sample_weight_g) * 100).toFixed(2) : null
+                return (
+                  <div key={f.key} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', flexWrap: 'wrap' }}>
+                      <label style={{ flex: '1 1 180px', fontSize: 13, fontWeight: 600, minWidth: 0 }}>
+                        {humanize(bareKey(f.key))}{f.unit === '%' && inGrams ? ' (g)' : f.unit ? ` (${f.unit})` : ''}{f.required ? ' *' : ''}
+                      </label>
+                      {pct != null && <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent-strong)', whiteSpace: 'nowrap' }}>= {pct}%</span>}
+                      {f.field_type === 'select' ? (
+                        <select className="select" style={{ width: 150, flex: '0 0 auto' }} value={values[f.key] ?? ''} onChange={e => setValues(p => ({ ...p, [f.key]: e.target.value }))}>
+                          <option value="">--</option>
+                          {(f.options || []).map(op => <option key={op} value={op}>{op}</option>)}
+                        </select>
+                      ) : (
+                        <input className="input" style={{ width: 110, flex: '0 0 auto' }} type={f.field_type === 'number' ? 'number' : 'text'}
+                          step={f.field_type === 'number' ? '0.01' : undefined}
+                          min={f.min_value ?? undefined} max={f.max_value ?? undefined}
+                          value={values[f.key] ?? ''} onChange={e => setValues(p => ({ ...p, [f.key]: e.target.value }))} />
+                      )}
+                      <button type="button" className="btn btn-icon btn-sm" title={t('ni.photosCount')}
+                        onClick={() => setOpenPhotoKey(k => k === f.key ? null : f.key)}
+                        style={nPhotos ? { color: 'var(--accent-strong)', fontWeight: 800 } : undefined}>
+                        <Icon name="camera" size={15} />{nPhotos > 0 && <span style={{ fontSize: 11, marginLeft: 2 }}>{nPhotos}</span>}
+                      </button>
+                    </div>
+                    {openPhotoKey === f.key && (
+                      <div style={{ padding: '4px 0 12px' }}>
+                        <ImageUploader fieldKey={f.key} images={photos[f.key] || []}
+                          onChange={urls => setPhotos(p => ({ ...p, [f.key]: urls }))} maxImages={3} disabled={saving} />
                       </div>
                     )}
-                    <div style={{ marginTop: 8 }}>
-                      <ImageUploader fieldKey={f.key} images={photos[f.key] || []}
-                        onChange={urls => setPhotos(p => ({ ...p, [f.key]: urls }))} maxImages={3} disabled={saving} />
-                    </div>
                   </div>
-                ))}
-              </div>
+                )
+              })}
             </Card>
           ))}
           {!fields.length && !tplErr && code && (

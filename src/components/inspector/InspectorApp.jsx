@@ -398,9 +398,11 @@ function MiniList({ label, list, setList, addLabel, summary, badge }) {
           <div key={i} style={{ display: 'flex', gap: 6 }}>
             <input className="input" type="number" step="0.1" inputMode="decimal" value={v}
               onChange={(e) => setAt(i, e.target.value)} style={{ flex: 1 }} />
-            <button type="button" className="btn btn-icon btn-sm" onClick={() => removeAt(i)} disabled={list.length === 1 && !v}>
-              <Icon name="x" size={13} />
-            </button>
+            {list.length > 1 && (
+              <button type="button" className="btn btn-icon btn-sm" onClick={() => removeAt(i)}>
+                <Icon name="x" size={13} />
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -427,6 +429,8 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
   const [photos, setPhotos] = useState({})
   const [saving, setSaving] = useState(false)
   const [inGrams, setInGrams] = useState(true) // defectos en gramos → % automático con el peso muestra
+  const [openSlot, setOpenSlot] = useState(null) // chip del set de fotos abierto
+  const [openPhotoKey, setOpenPhotoKey] = useState(null) // uploader visible solo del defecto tocado
   const [sampleWeights, setSampleWeights] = useState(['']) // N muestras pesadas, se suman
   const [baxloReadings, setBaxloReadings] = useState(['']) // N lecturas → min/moda/máx
 
@@ -542,32 +546,43 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
     const gramsField = inGrams && f.unit === '%'
     const label = humanize(bareKey(f.key)) + (gramsField ? ' (g)' : f.unit ? ` (${f.unit})` : '')
     const sw = header.sample_weight_g === '' ? null : Number(header.sample_weight_g)
+    const nPhotos = (photos[f.key] || []).length
+    const pct = gramsField && values[f.key] && sw > 0 && Number.isFinite(Number(values[f.key]))
+      ? (Number(values[f.key]) / sw * 100).toFixed(2) : null
     return (
-      <div key={f.key}>
-        <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {f.is_major && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--red)' }} />}{label}
-        </label>
-        {type === 'select' ? (
-          <select className="select" value={values[f.key] ?? ''} onChange={e => setV(f.key, e.target.value)}>
-            <option value="">{t('cap.select')}</option>
-            {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
-          </select>
-        ) : type === 'boolean' ? (
-          <div className="seg" style={{ width: '100%' }}>
-            <button type="button" className={values[f.key] === 'true' ? 'on' : ''} style={{ flex: 1 }} onClick={() => setV(f.key, 'true')}>{t('cap.yes')}</button>
-            <button type="button" className={values[f.key] === 'false' ? 'on' : ''} style={{ flex: 1 }} onClick={() => setV(f.key, 'false')}>{t('cap.no')}</button>
+      <div key={f.key} style={{ borderBottom: '1px solid var(--border)', gridColumn: '1 / -1' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', flexWrap: 'wrap' }}>
+          <label style={{ flex: '1 1 150px', fontSize: 13, fontWeight: 600, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {f.is_major && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--red)', flexShrink: 0 }} />}{label}
+          </label>
+          {pct != null && <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent-strong)', whiteSpace: 'nowrap' }}>= {pct}%</span>}
+          {type === 'select' ? (
+            <select className="select" style={{ width: 140, flex: '0 0 auto' }} value={values[f.key] ?? ''} onChange={e => setV(f.key, e.target.value)}>
+              <option value="">{t('cap.select')}</option>
+              {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          ) : type === 'boolean' ? (
+            <div className="seg" style={{ flex: '0 0 auto' }}>
+              <button type="button" className={values[f.key] === 'true' ? 'on' : ''} onClick={() => setV(f.key, 'true')}>{t('cap.yes')}</button>
+              <button type="button" className={values[f.key] === 'false' ? 'on' : ''} onClick={() => setV(f.key, 'false')}>{t('cap.no')}</button>
+            </div>
+          ) : type === 'text' ? (
+            <input className="input" style={{ width: 140, flex: '0 0 auto' }} value={values[f.key] ?? ''} onChange={e => setV(f.key, e.target.value)} />
+          ) : (
+            <div style={{ width: 120, flex: '0 0 auto' }}>
+              <UnitField value={values[f.key] ?? ''} onChange={v => setV(f.key, v)} unit={gramsField ? 'g' : (f.unit || '%')} />
+            </div>
+          )}
+          <button type="button" className="btn btn-icon btn-sm" onClick={() => setOpenPhotoKey(k => k === f.key ? null : f.key)}
+            style={nPhotos ? { color: 'var(--accent-strong)', fontWeight: 800 } : undefined}>
+            <Icon name="camera" size={15} />{nPhotos > 0 && <span style={{ fontSize: 11, marginLeft: 2 }}>{nPhotos}</span>}
+          </button>
+        </div>
+        {openPhotoKey === f.key && (
+          <div style={{ padding: '2px 0 10px' }}>
+            <PhotoField fieldKey={f.key} urls={photos[f.key] || []} onChange={u => setP(f.key, u)} />
           </div>
-        ) : type === 'text' ? (
-          <input className="input" value={values[f.key] ?? ''} onChange={e => setV(f.key, e.target.value)} />
-        ) : (
-          <UnitField value={values[f.key] ?? ''} onChange={v => setV(f.key, v)} unit={gramsField ? 'g' : (f.unit || '%')} />
         )}
-        {gramsField && values[f.key] && sw > 0 && Number.isFinite(Number(values[f.key])) && (
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--accent-strong)', marginTop: 4 }}>
-            = {(Number(values[f.key]) / sw * 100).toFixed(2)}%
-          </div>
-        )}
-        <PhotoField fieldKey={f.key} urls={photos[f.key] || []} onChange={u => setP(f.key, u)} />
       </div>
     )
   }
@@ -678,23 +693,42 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
 
           <SectionCard n="4" icon="camera" title={`${t('cap.photoSet')} · ${PHOTO_SET.filter((p) => (photos[photoSetKey(p.tag)] || []).length > 0).length}/18`} sub={t('cap.photoSetSub')}>
             {['general', 'variety'].map((g) => (
-              <div key={g} style={{ marginBottom: g === 'general' ? 14 : 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 8 }}>
+              <div key={g} style={{ marginBottom: g === 'general' ? 12 : 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 6 }}>
                   {g === 'general' ? t('ni.photoSetGeneral') : t('ni.photoSetVariety')}
                 </div>
-                <div className="form-grid">
-                  {PHOTO_SET.filter((p) => p.group === g).map((p) => (
-                    <div key={p.tag}>
-                      <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 17, height: 17, borderRadius: '50%', background: (photos[photoSetKey(p.tag)] || []).length ? 'var(--accent-strong)' : 'var(--surface-2, rgba(0,0,0,.08))', color: (photos[photoSetKey(p.tag)] || []).length ? '#fff' : 'var(--text-faint)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, flexShrink: 0 }}>{p.n}</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                  {PHOTO_SET.filter((p) => p.group === g).map((p) => {
+                    const n = (photos[photoSetKey(p.tag)] || []).length
+                    const open = openSlot === p.tag
+                    return (
+                      <button key={p.tag} type="button" onClick={() => setOpenSlot(open ? null : p.tag)}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999,
+                          fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                          border: '1.5px solid ' + (open || n ? 'var(--accent-strong)' : 'var(--border)'),
+                          background: n ? 'var(--accent-strong)' : open ? 'var(--surface-2, rgba(99,102,241,.08))' : 'transparent',
+                          color: n ? '#fff' : 'var(--text-dim)',
+                        }}>
+                        <span style={{ fontWeight: 800 }}>{p.n}</span>
                         {lang === 'en' ? p.en : p.es}
-                      </label>
-                      <PhotoField fieldKey={photoSetKey(p.tag)} urls={photos[photoSetKey(p.tag)] || []} onChange={(u) => setP(photoSetKey(p.tag), u)} />
-                    </div>
-                  ))}
+                        <Icon name="camera" size={12} />
+                        {n > 0 && <span style={{ fontWeight: 800 }}>{n}</span>}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             ))}
+            {openSlot && (() => {
+              const p = PHOTO_SET.find((x) => x.tag === openSlot)
+              return (
+                <div style={{ marginTop: 12, padding: 12, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface-2, rgba(0,0,0,.02))' }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 8 }}>{p.n}. {lang === 'en' ? p.en : p.es}</div>
+                  <PhotoField fieldKey={photoSetKey(p.tag)} urls={photos[photoSetKey(p.tag)] || []} onChange={(u) => setP(photoSetKey(p.tag), u)} />
+                </div>
+              )
+            })()}
           </SectionCard>
 
           <SectionCard n="5" icon="edit" title={t('cap.s4')} sub={t('cap.s4sub')}>
