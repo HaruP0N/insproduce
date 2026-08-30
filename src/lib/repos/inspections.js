@@ -198,6 +198,7 @@ export async function getInspectionDetail(id, user) {
             i.brix_avg, i.brix_min, i.brix_max, i.brix_mode, i.diameter_min, i.diameter_max,
             i.firmness_min, i.firmness_mode, i.firmness_max,
             i.temp_water, i.temp_ambient, i.temp_pulp, i.net_weight, i.sample_weight_g, i.notes,
+            i.standard_id, st.name AS standard_name,
             c.code AS commodity_code, c.name AS commodity_name,
             l.lot_code AS lot, l.variety, pr.name AS producer, p.pallet_code,
             r.quality_total_pct, r.condition_total_pct, r.total_defects_pct, r.score, r.resolution, r.worst_band,
@@ -209,6 +210,7 @@ export async function getInspectionDetail(id, user) {
      LEFT JOIN qc.lots l ON l.id = p.lot_id
      LEFT JOIN qc.producers pr ON pr.id = l.producer_id
      LEFT JOIN qc.inspection_results r ON r.inspection_id = i.id
+     LEFT JOIN qc.quality_standards st ON st.id = i.standard_id
      WHERE i.id = @id AND i.deleted_at IS NULL`,
     { id })
   const row = head.recordset?.[0]
