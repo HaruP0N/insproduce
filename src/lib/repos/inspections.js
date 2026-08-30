@@ -116,6 +116,7 @@ export async function createInspection(user, body) {
       tw: num(body.temp_water), ta: num(body.temp_ambient), tp: num(body.temp_pulp),
       nw: num(body.net_weight) > 0 ? num(body.net_weight) : null,
       sw: num(body.sample_weight_g) > 0 ? num(body.sample_weight_g) : null,
+      tpw: num(body.ten_pieces_weight_g) > 0 ? num(body.ten_pieces_weight_g) : null,
       fMin: num(body.baxlo_min), fMode: num(body.baxlo_mode), fMax: num(body.baxlo_max),
       arrival: arrivalId, reinsp: reinspectionOf,
       notes: body.notes ? String(body.notes) : null
@@ -123,10 +124,10 @@ export async function createInspection(user, body) {
       `INSERT INTO qc.inspections
         (pallet_id, assignment_id, commodity_id, template_id, template_version, standard_id,
          created_by_user_id, brix_avg, brix_min, brix_max, brix_mode, diameter_min, diameter_max,
-         temp_water, temp_ambient, temp_pulp, net_weight, sample_weight_g,
+         temp_water, temp_ambient, temp_pulp, net_weight, sample_weight_g, ten_pieces_weight_g,
          firmness_min, firmness_mode, firmness_max, arrival_id, reinspection_of, notes)
        OUTPUT INSERTED.id
-       VALUES (@pallet, @assignment, @cid, @tpl, @tver, @std, @uid, @brix, @brixMin, @brixMax, @brixMode, @diaMin, @diaMax, @tw, @ta, @tp, @nw, @sw, @fMin, @fMode, @fMax, @arrival, @reinsp, @notes)`)
+       VALUES (@pallet, @assignment, @cid, @tpl, @tver, @std, @uid, @brix, @brixMin, @brixMax, @brixMode, @diaMin, @diaMax, @tw, @ta, @tp, @nw, @sw, @tpw, @fMin, @fMode, @fMax, @arrival, @reinsp, @notes)`)
     const inspectionId = ins.recordset[0].id
 
     // Mediciones (traducir JSON plano -> filas tipadas)
@@ -197,7 +198,7 @@ export async function getInspectionDetail(id, user) {
     `SELECT i.id, i.created_at, i.updated_at, i.commodity_id, i.created_by_user_id,
             i.brix_avg, i.brix_min, i.brix_max, i.brix_mode, i.diameter_min, i.diameter_max,
             i.firmness_min, i.firmness_mode, i.firmness_max,
-            i.temp_water, i.temp_ambient, i.temp_pulp, i.net_weight, i.sample_weight_g, i.notes,
+            i.temp_water, i.temp_ambient, i.temp_pulp, i.net_weight, i.sample_weight_g, i.ten_pieces_weight_g, i.notes,
             i.standard_id, st.name AS standard_name,
             c.code AS commodity_code, c.name AS commodity_name,
             l.lot_code AS lot, l.variety, pr.name AS producer, p.pallet_code,
@@ -278,7 +279,7 @@ export async function buildPdfInput(id) {
     `SELECT i.id, i.created_at, i.notes, i.commodity_id, i.standard_id,
             i.brix_avg, i.brix_min, i.brix_max, i.brix_mode, i.diameter_min, i.diameter_max,
             i.firmness_min, i.firmness_max, i.firmness_mode,
-            i.temp_water, i.temp_ambient, i.temp_pulp, i.net_weight, i.sample_weight_g,
+            i.temp_water, i.temp_ambient, i.temp_pulp, i.net_weight, i.sample_weight_g, i.ten_pieces_weight_g,
             c.code AS commodity_code, c.name AS commodity_name,
             l.lot_code AS lot, l.variety, pr.name AS producer, p.pallet_code, u.name AS inspector_name,
             s.name AS standard_name,

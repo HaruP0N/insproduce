@@ -44,7 +44,7 @@ export async function PUT(req, context) {
         brix_avg: num(body.brix_avg), brix_min: num(body.brix_min), brix_max: num(body.brix_max), brix_mode: num(body.brix_moda ?? body.brix_mode),
         diameter_min: num(body.diameter_min), diameter_max: num(body.diameter_max),
         temp_water: num(body.temp_water), temp_ambient: num(body.temp_ambient), temp_pulp: num(body.temp_pulp),
-        sample_weight_g: num(body.sample_weight_g),
+        sample_weight_g: num(body.sample_weight_g), ten_pieces_weight_g: num(body.ten_pieces_weight_g),
         net_weight: num(body.net_weight) > 0 ? num(body.net_weight) : null,
         notes: body.notes != null ? String(body.notes) : null,
         uid: auth.user.id
@@ -52,7 +52,7 @@ export async function PUT(req, context) {
         `UPDATE qc.inspections SET
            brix_avg=@brix_avg, brix_min=@brix_min, brix_max=@brix_max, brix_mode=@brix_mode,
            diameter_min=@diameter_min, diameter_max=@diameter_max,
-           temp_water=@temp_water, temp_ambient=@temp_ambient, temp_pulp=@temp_pulp, sample_weight_g=@sample_weight_g,
+           temp_water=@temp_water, temp_ambient=@temp_ambient, temp_pulp=@temp_pulp, sample_weight_g=@sample_weight_g, ten_pieces_weight_g=@ten_pieces_weight_g,
            net_weight=@net_weight, notes=@notes, updated_by_user_id=@uid, updated_at=SYSUTCDATETIME()
          WHERE id=@id`)
 

@@ -49,7 +49,7 @@ export async function GET(req) {
       producer: lang === 'en' ? 'EXAMPLE — delete this row' : 'EJEMPLO — borrar esta fila',
       lot: 'L-2026-001', pallet_number: 'P1', variety: 'Duke', packaging_type: '12x6 Oz',
       packaging_date: new Date().toISOString().slice(0, 10),
-      net_weight: 277, sample_weight_g: 1070, brix_avg: 12.5, temp_pulp: 1.5,
+      net_weight: 277, sample_weight_g: 1070, ten_pieces_weight_g: 28, brix_avg: 12.5, temp_pulp: 1.5,
       baxlo_min: 62, baxlo_mode: 78, baxlo_max: 88,
     }
     for (const f of fields.slice(0, 3)) example[f.key] = 0

@@ -15,6 +15,7 @@ export const HEADER_COLUMNS = [
   { key: 'packaging_date', es: 'Fecha Embalaje', en: 'Packaging date', width: 14, type: 'date' },
   { key: 'net_weight', es: 'Peso Neto (g)', en: 'Net weight (g)', width: 13, type: 'number' },
   { key: 'sample_weight_g', es: 'Peso Muestra (g)', en: 'Sample weight (g)', width: 14, type: 'number' },
+  { key: 'ten_pieces_weight_g', es: 'Peso 10 Frutos (g)', en: '10 Pieces Weight (g)', width: 15, type: 'number' },
   { key: 'brix_avg', es: 'Brix Prom', en: 'Brix avg', width: 10, type: 'number' },
   { key: 'brix_min', es: 'Brix Min', en: 'Brix min', width: 10, type: 'number' },
   { key: 'brix_max', es: 'Brix Max', en: 'Brix max', width: 10, type: 'number' },

@@ -249,6 +249,7 @@ export async function generateInspectionPDF(report) {
     ['Diameter (min / max) mm', `${fmt(insp.diameter_min)} / ${fmt(insp.diameter_max)}`],
     ['Pulp temp °C', fmt(insp.temp_pulp)],
     ['Net weight (g) / Sample (g)', `${fmt(insp.net_weight)} / ${fmt(insp.sample_weight_g)}`],
+    ['10 pieces weight (g)', fmt(insp.ten_pieces_weight_g)],
   ]
   hm.forEach((it, i) => {
     const x = M + (i % 2) * (CW / 2), ty = py + Math.floor(i / 2) * 11

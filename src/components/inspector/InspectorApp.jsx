@@ -9,6 +9,8 @@ import { StatusBadge, ScoreCell } from '@/components/proto/ui'
 import { RES, RES_VAR, fmt1, fechaCorta } from '@/lib/proto'
 import { useI18n, LangToggle } from '@/lib/i18n'
 import { PHOTO_SET, photoSetKey } from '@/lib/photoSet'
+import { sumWeights, baxloStats } from '@/lib/sampling'
+import { baxloClass } from '@/components/admin/screens/NuevaInspeccion'
 import { uploadToCloudinary, compressImage } from '@/lib/cloudinary'
 import {
   getAssigned, getCompleted, getDetail, getCommodities, getTemplate,
@@ -378,10 +380,41 @@ const nextPalletCode = (code) => {
 
 const EMPTY_HEADER = {
   pallet_number: '',
-  packaging_type: '', packaging_date: '', net_weight: '', sample_weight_g: '',
+  packaging_type: '', packaging_date: '', net_weight: '', sample_weight_g: '', ten_pieces_weight: '',
   brix_avg: '', brix_min: '', brix_max: '',
   diameter_min: '', diameter_max: '',
   temp_pulp: '', notes: '',
+}
+
+// Lista dinámica compacta (pesos de muestra, lecturas Baxlo) para el celular.
+function MiniList({ label, list, setList, addLabel, summary, badge }) {
+  const setAt = (i, v) => setList((p) => p.map((x, j) => (j === i ? v : x)))
+  const removeAt = (i) => setList((p) => (p.length === 1 ? [''] : p.filter((_, j) => j !== i)))
+  return (
+    <div>
+      <label className="field-label">{label}</label>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {list.map((v, i) => (
+          <div key={i} style={{ display: 'flex', gap: 6 }}>
+            <input className="input" type="number" step="0.1" inputMode="decimal" value={v}
+              onChange={(e) => setAt(i, e.target.value)} style={{ flex: 1 }} />
+            <button type="button" className="btn btn-icon btn-sm" onClick={() => removeAt(i)} disabled={list.length === 1 && !v}>
+              <Icon name="x" size={13} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button type="button" className="btn btn-sm" style={{ marginTop: 6 }} onClick={() => setList((p) => [...p, ''])}>
+        <Icon name="plus" size={13} /> {addLabel}
+      </button>
+      {summary && (
+        <div style={{ marginTop: 6, fontSize: 12, fontWeight: 800, color: 'var(--accent-strong)', display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+          {summary}
+          {badge && <span style={{ background: badge.bg, color: badge.fg, padding: '1px 8px', borderRadius: 999, fontSize: 10.5, fontWeight: 800 }}>{badge.label}</span>}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
@@ -394,6 +427,19 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
   const [photos, setPhotos] = useState({})
   const [saving, setSaving] = useState(false)
   const [inGrams, setInGrams] = useState(true) // defectos en gramos → % automático con el peso muestra
+  const [sampleWeights, setSampleWeights] = useState(['']) // N muestras pesadas, se suman
+  const [baxloReadings, setBaxloReadings] = useState(['']) // N lecturas → min/moda/máx
+
+  useEffect(() => {
+    const total = sumWeights(sampleWeights)
+    const st = baxloStats(baxloReadings)
+    setHeader((p) => ({
+      ...p,
+      sample_weight_g: total != null ? String(total) : '',
+      baxlo_min: st ? String(st.min) : '', baxlo_mode: st ? String(st.mode) : '', baxlo_max: st ? String(st.max) : '',
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sampleWeights, baxloReadings])
 
   useEffect(() => {
     let alive = true
@@ -452,6 +498,10 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
         packaging_date: header.packaging_date || null,
         net_weight: header.net_weight === '' ? null : Number(header.net_weight),
         sample_weight_g: header.sample_weight_g === '' ? null : Number(header.sample_weight_g),
+        ten_pieces_weight_g: header.ten_pieces_weight === '' ? null : Number(header.ten_pieces_weight),
+        baxlo_min: header.baxlo_min === '' ? null : Number(header.baxlo_min),
+        baxlo_mode: header.baxlo_mode === '' ? null : Number(header.baxlo_mode),
+        baxlo_max: header.baxlo_max === '' ? null : Number(header.baxlo_max),
         brix_avg: header.brix_avg === '' ? null : Number(header.brix_avg),
         brix_min: header.brix_min === '' ? null : Number(header.brix_min),
         brix_max: header.brix_max === '' ? null : Number(header.brix_max),
@@ -470,7 +520,8 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
       fetch(`/api/inspecciones/${id}/generar-pdf`, { method: 'POST', credentials: 'include' }).catch(() => {})
       if (andNext) {
         // mismo lote, siguiente pallet: se conserva la cabecera y se limpian métricas y fotos
-        setHeader(p => ({ ...p, pallet_number: nextPalletCode(p.pallet_number) }))
+        setHeader(p => ({ ...p, pallet_number: nextPalletCode(p.pallet_number), ten_pieces_weight: '' }))
+        setSampleWeights(['']); setBaxloReadings([''])
         setValues({}); setPhotos({})
         window.scrollTo({ top: 0, behavior: 'smooth' })
         onSaveNext?.({ id, lote: task.lote })
@@ -559,8 +610,13 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
                 <UnitField value={header.net_weight} onChange={v => setH('net_weight', v)} unit="g" />
               </div>
               <div>
-                <label className="field-label">{t('cap.sampleWeight')} *</label>
-                <UnitField value={header.sample_weight_g} onChange={v => setH('sample_weight_g', v)} unit="g" />
+                <MiniList label={`${t('cap.sampleWeight')} (g) *`} list={sampleWeights} setList={setSampleWeights}
+                  addLabel={t('ni.addWeight')}
+                  summary={header.sample_weight_g ? `${t('ni.sampleTotal')}: ${header.sample_weight_g} g` : null} />
+              </div>
+              <div>
+                <label className="field-label">{t('ni.tenPieces')}</label>
+                <UnitField value={header.ten_pieces_weight} onChange={v => setH('ten_pieces_weight', v)} unit="g" />
               </div>
             </div>
           </SectionCard>
@@ -578,6 +634,12 @@ function CaptureForm({ task, onSave, onSaveNext, onCancel, onError }) {
               <div className="measure-group-h"><Icon name="thermometer" size={15} style={{ color: 'var(--accent-strong)' }} />{t('cap.temp')}</div>
               <div className="measure-cols cols-3">
                 <div><label className="field-label">{t('cap.pulp')} *</label><UnitField value={header.temp_pulp} onChange={v => setH('temp_pulp', v)} unit="°C" /></div>
+                <div>
+                  <MiniList label={t('ni.baxloReadings')} list={baxloReadings} setList={setBaxloReadings}
+                    addLabel={t('ni.addReading')}
+                    summary={header.baxlo_min ? `Min ${header.baxlo_min} · Moda ${header.baxlo_mode} · Máx ${header.baxlo_max}` : null}
+                    badge={baxloClass(header.baxlo_mode)} />
+                </div>
               </div>
             </div>
             <div className="measure-group">

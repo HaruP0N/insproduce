@@ -7,11 +7,12 @@ import ImageUploader from '@/components/ImageUploader'
 import { useI18n } from '@/lib/i18n'
 import { commodityVisual } from '@/lib/inspectorData'
 import { PHOTO_SET, photoSetKey } from '@/lib/photoSet'
+import { sumWeights, baxloStats } from '@/lib/sampling'
 
 const EMPTY_HEADER = {
   producer: '', lot: '', pallet_number: '', variety: '', caliber: '',
   packaging_code: '', packaging_type: '', packaging_date: '',
-  net_weight: '', sample_weight_g: '', brix_avg: '', baxlo_min: '', baxlo_mode: '', baxlo_max: '',
+  net_weight: '', sample_weight_g: '', ten_pieces_weight: '', brix_avg: '', baxlo_min: '', baxlo_mode: '', baxlo_max: '',
   temp_pulp: '', notes: '',
 }
 
@@ -47,6 +48,40 @@ export function baxloClass(v) {
   if (n < 60) return { label: 'Soft', bg: '#F7DFDF', fg: '#8A2727' }
   if (n < 75) return { label: 'Sensitiva', bg: '#F3EDD6', fg: '#6B5300' }
   return { label: 'Firme', bg: '#E3F2E8', fg: '#1D5E3A' }
+}
+
+// Lista dinámica de valores numéricos (pesos de muestra, lecturas Baxlo):
+// agregar cuantos se quiera; el resumen (suma o min/moda/máx) se calcula solo.
+function WeightList({ label, help, list, setList, summary, badge, addLabel, t }) {
+  const setAt = (i, v) => setList((p) => p.map((x, j) => (j === i ? v : x)))
+  const removeAt = (i) => setList((p) => (p.length === 1 ? [''] : p.filter((_, j) => j !== i)))
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label className="field-label">{label}</label>
+      {help && <div className="form-help" style={{ marginTop: 0, marginBottom: 6 }}>{help}</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {list.map((v, i) => (
+          <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input className="input" type="number" step="0.1" inputMode="decimal" value={v}
+              onChange={(e) => setAt(i, e.target.value)} style={{ flex: 1 }} />
+            <button type="button" className="btn btn-icon btn-sm" onClick={() => removeAt(i)} title={t('common.delete')}
+              disabled={list.length === 1 && !v}>
+              <Icon name="x" size={13} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button type="button" className="btn btn-sm" style={{ marginTop: 6 }} onClick={() => setList((p) => [...p, ''])}>
+        <Icon name="plus" size={13} /> {addLabel}
+      </button>
+      {summary && (
+        <div style={{ marginTop: 7, fontSize: 12.5, fontWeight: 800, color: 'var(--accent-strong)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {summary}
+          {badge && <span style={{ background: badge.bg, color: badge.fg, padding: '1px 8px', borderRadius: 999, fontSize: 11, fontWeight: 800 }}>{badge.label}</span>}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // Set de fotos oficial FTF: 7 generales (una vez por empaque) + 11 por variedad,
@@ -91,6 +126,8 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
   const [photos, setPhotos] = useState({})
   const [saving, setSaving] = useState(false)
   const [step, setStep] = useState(1) // 1 = datos iniciales (identificación), 2 = datos de la inspección
+  const [sampleWeights, setSampleWeights] = useState(['']) // se pesan N muestras y se SUMAN
+  const [baxloReadings, setBaxloReadings] = useState(['']) // N lecturas → min/moda/máx automáticos
   const [inGrams, setInGrams] = useState(true) // defectos en gramos → % automático con el peso muestra
 
   // Contexto desde Arribos: pre-carga commodity y, en reinspección, los datos del pallet
@@ -164,6 +201,19 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code])
 
+  // las listas alimentan los campos derivados de la cabecera
+  useEffect(() => {
+    const total = sumWeights(sampleWeights)
+    const st = baxloStats(baxloReadings)
+    setHeader((p) => ({
+      ...p,
+      sample_weight_g: total != null ? String(total) : '',
+      baxlo_min: st ? String(st.min) : '',
+      baxlo_mode: st ? String(st.mode) : '',
+      baxlo_max: st ? String(st.max) : '',
+    }))
+  }, [sampleWeights, baxloReadings])
+
   const grouped = useMemo(() => groupFields(fields), [fields])
   const setH = (k) => (e) => setHeader(p => ({ ...p, [k]: e.target.value }))
   const num = (v) => (v === '' || v == null ? null : Number(v))
@@ -201,6 +251,7 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
         packaging_date: header.packaging_date || null,
         net_weight: num(header.net_weight),
         sample_weight_g: num(header.sample_weight_g),
+        ten_pieces_weight_g: num(header.ten_pieces_weight),
         brix_avg: num(header.brix_avg),
         temp_pulp: num(header.temp_pulp),
         baxlo_min: num(header.baxlo_min),
@@ -225,7 +276,8 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
       fetch(`/api/inspecciones/${data.id}/generar-pdf`, { method: 'POST', credentials: 'include' }).catch(() => {})
       if (andNext) {
         // mismo lote, siguiente pallet: se conserva la cabecera y se limpian métricas y fotos
-        setHeader(p => ({ ...p, pallet_number: nextPalletCode(p.pallet_number) }))
+        setHeader(p => ({ ...p, pallet_number: nextPalletCode(p.pallet_number), ten_pieces_weight: '' }))
+        setSampleWeights(['']); setBaxloReadings([''])
         setValues({}); setPhotos({})
         window.scrollTo({ top: 0, behavior: 'smooth' })
         onToast({ title: t('ni.savedNext'), sub: `ID ${data.id}` })
@@ -268,8 +320,8 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
     <div className="content-inner fade-up">
       {ctx?.arrival && (
         <div className="form-help" style={{ marginBottom: 12, padding: '9px 13px', background: 'var(--surface-2, rgba(99,102,241,.06))', border: '1px solid var(--border)', borderRadius: 9, fontSize: 13 }}>
-          📦 {t('ni.arrivalBanner', { c: ctx.arrival.container })}
-          {ctx.arrival.warehouse ? <> · 🏭 {ctx.arrival.warehouse}</> : null}
+          {t('ni.arrivalBanner', { c: ctx.arrival.container })}
+          {ctx.arrival.warehouse ? <> · {ctx.arrival.warehouse}</> : null}
           {ctx.arrival.week_no ? <> · {t('arr.week')} {ctx.arrival.week_no}</> : null}
           {ctx.reinspect && <> · ↺ {t('ni.reinspBanner', { id: ctx.reinspect.id, lot: ctx.reinspect.lot || '—' })}</>}
         </div>
@@ -332,6 +384,19 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
               <input className="input" type="date" value={header.packaging_date} onChange={setH('packaging_date')} />
             </Field>
           </div>
+          <div style={{ fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', borderBottom: '1px solid var(--border)', padding: '14px 0 4px', marginBottom: 10 }}>
+            {t('ni.samplesTitle')}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap: '0 16px' }}>
+            <WeightList label={t('ni.sampleWeights')} help={t('ni.sampleWeightsHelp')} list={sampleWeights} setList={setSampleWeights}
+              summary={header.sample_weight_g ? `${t('ni.sampleTotal')}: ${header.sample_weight_g} g` : null} addLabel={t('ni.addWeight')} t={t} />
+            <Field label={t('ni.tenPieces')} help={t('ni.tenPiecesHelp')}>
+              <input className="input" type="number" step="0.1" value={header.ten_pieces_weight} onChange={setH('ten_pieces_weight')} placeholder="28" />
+            </Field>
+            <WeightList label={t('ni.baxloReadings')} help={t('ni.baxloReadingsHelp')} list={baxloReadings} setList={setBaxloReadings}
+              summary={header.baxlo_min ? `Min ${header.baxlo_min} · ${t('ni.baxloModeShort')} ${header.baxlo_mode} · Máx ${header.baxlo_max}` : null}
+              badge={baxloClass(header.baxlo_mode)} addLabel={t('ni.addReading')} t={t} />
+          </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
             <button className="btn" onClick={onCancel}>{t('common.cancel')}</button>
             <button className="btn btn-primary" onClick={nextStep} disabled={!code}>
@@ -357,16 +422,15 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
 
           <div className="grid cols-2-1" style={{ alignItems: 'start', marginBottom: 16 }}>
             <Card title={t('ni.step2Title')} sub={t('ni.step2Sub')}>
+              <div className="form-help" style={{ marginBottom: 10 }}>
+                {t('ni.sampleTotal')}: <b>{header.sample_weight_g || '—'} g</b>
+                {header.baxlo_min ? <> · Baxlo {header.baxlo_min}/{header.baxlo_mode}/{header.baxlo_max}</> : null}
+                {' '}· <a style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setStep(1)}>{t('ni.editInitial')}</a>
+              </div>
               <div style={GRID3}>
-                <Field label={t('ni.sampleWeight')} help={t('ni.sampleWeightHelp')} required>
-                  <input className="input" type="number" step="0.1" value={header.sample_weight_g} onChange={setH('sample_weight_g')} placeholder="1070" />
-                </Field>
                 {numberField('net_weight', 'ni.netWeight')}
                 {numberField('brix_avg', 'ni.brix')}
                 {numberField('temp_pulp', 'ni.tempPulp')}
-                {numberField('baxlo_min', 'ni.baxloMin')}
-                {numberField('baxlo_mode', 'ni.baxloMode')}
-                {numberField('baxlo_max', 'ni.baxloMax')}
               </div>
               <Field label={t('ni.notes')}>
                 <textarea className="input" rows={3} value={header.notes} onChange={setH('notes')} />
