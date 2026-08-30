@@ -8,6 +8,7 @@ import { useI18n } from '@/lib/i18n'
 import { commodityVisual } from '@/lib/inspectorData'
 import { PHOTO_SET, photoSetKey } from '@/lib/photoSet'
 import { sumWeights, baxloStats } from '@/lib/sampling'
+import { groupManifest } from '@/lib/manifest'
 
 const EMPTY_HEADER = {
   producer: '', lot: '', pallet_number: '', variety: '', caliber: '',
@@ -36,6 +37,19 @@ export function nextPalletCode(code) {
   if (!c) return 'P2' // el guardado sin N° usó 'P1'
   const m = c.match(/^(.*?)(\d+)$/)
   return m ? m[1] + (Number(m[2]) + 1) : ''
+}
+
+// prefill de la cabecera desde un pallet del manifiesto (mismo mapeo que el botón Inspeccionar)
+function manifestPrefill(g) {
+  return {
+    producer: g.growers.join(' + '),
+    lot: g.lot || '',
+    pallet_number: g.pallet,
+    variety: g.varieties.join(' / '),
+    packaging_type: g.parts[0]?.packaging || '',
+    packaging_date: (g.dates || []).slice().sort()[0] || '',
+    caliber: ((g.parts[0]?.packaging || '').match(/jumbo|large|regular|small|petite/i)?.[0] || '').replace(/^./, (c) => c.toUpperCase()),
+  }
 }
 
 const GRID3 = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0 16px' }
@@ -149,6 +163,7 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
   const [saving, setSaving] = useState(false)
   const [step, setStep] = useState(1) // 1 = datos iniciales (identificación), 2 = datos de la inspección
   const [openPhotoKey, setOpenPhotoKey] = useState(null) // uploader visible solo del defecto tocado
+  const [donePallets, setDonePallets] = useState(() => new Set()) // guardados en esta sesión (multi-pallet)
   const [sampleWeights, setSampleWeights] = useState(['']) // se pesan N muestras y se SUMAN
   const [baxloReadings, setBaxloReadings] = useState(['']) // N lecturas → min/moda/máx automáticos
   const [inGrams, setInGrams] = useState(true) // defectos en gramos → % automático con el peso muestra
@@ -238,6 +253,21 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
   }, [sampleWeights, baxloReadings])
 
   const grouped = useMemo(() => groupFields(fields), [fields])
+
+  // pallets del manifiesto del arribo: ya inspeccionados (BD) o guardados recién quedan marcados
+  const manifestGroups = useMemo(() => {
+    if (!ctx?.arrival?.manifest?.length) return []
+    const inspected = new Set((ctx.arrival.inspections || []).map((i) => i.pallet_code))
+    return groupManifest(ctx.arrival.manifest).map((g) => ({
+      ...g, done: inspected.has(g.pallet) || donePallets.has(g.pallet),
+    }))
+  }, [ctx, donePallets])
+
+  const applyManifestPallet = (pallet) => {
+    const g = manifestGroups.find((x) => x.pallet === pallet)
+    if (!g) return
+    setHeader((p) => ({ ...p, ...manifestPrefill(g) }))
+  }
   const setH = (k) => (e) => setHeader(p => ({ ...p, [k]: e.target.value }))
   const num = (v) => (v === '' || v == null ? null : Number(v))
 
@@ -298,12 +328,29 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
       // PDF del informe en segundo plano (no bloquea el guardado)
       fetch(`/api/inspecciones/${data.id}/generar-pdf`, { method: 'POST', credentials: 'include' }).catch(() => {})
       if (andNext) {
-        // mismo lote, siguiente pallet: se conserva la cabecera y se limpian métricas y fotos
-        setHeader(p => ({ ...p, pallet_number: nextPalletCode(p.pallet_number), ten_pieces_weight: '' }))
+        const savedPallet = header.pallet_number.trim()
         setSampleWeights(['']); setBaxloReadings([''])
         setValues({}); setPhotos({})
+        if (manifestGroups.length) {
+          // siguiente pallet PENDIENTE del manifiesto, con su propio prellenado
+          const done = new Set([...donePallets, savedPallet])
+          setDonePallets(done)
+          const next = manifestGroups.find((g) => !g.done && g.pallet !== savedPallet && !done.has(g.pallet))
+          if (next) {
+            setHeader((p) => ({ ...p, ...manifestPrefill(next), ten_pieces_weight: '' }))
+            setStep(1)
+            onToast({ title: t('ni.savedNext'), sub: `ID ${data.id} · ${t('ni.nextPallet', { p: next.pallet })}` })
+          } else {
+            onToast({ title: t('ni.allPalletsDone'), sub: `ID ${data.id}` })
+            onDone()
+            return
+          }
+        } else {
+          // sin manifiesto: correlativo P1→P2 como antes
+          setHeader(p => ({ ...p, pallet_number: nextPalletCode(p.pallet_number), ten_pieces_weight: '' }))
+          onToast({ title: t('ni.savedNext'), sub: `ID ${data.id}` })
+        }
         window.scrollTo({ top: 0, behavior: 'smooth' })
-        onToast({ title: t('ni.savedNext'), sub: `ID ${data.id}` })
       } else {
         onToast({
           title: t('ni.saved'),
@@ -368,6 +415,19 @@ export default function NuevaInspeccionScreen({ onToast, onDone, onCancel, ctx }
 
       {step === 1 && (
         <Card title={t('ni.step1Title')} sub={t('ni.step1Sub')}>
+          {manifestGroups.length > 0 && (
+            <Field label={t('ni.manifestPallet')} help={t('ni.manifestPalletHelp')}>
+              <select className="select" value={manifestGroups.some((g) => g.pallet === header.pallet_number) ? header.pallet_number : ''}
+                onChange={(e) => applyManifestPallet(e.target.value)}>
+                <option value="">{t('ni.manifestPalletPick')}</option>
+                {manifestGroups.map((g) => (
+                  <option key={g.pallet} value={g.pallet} disabled={g.done}>
+                    {g.pallet} · {g.growers.join('+')} · {g.varieties.join('/')}{g.done ? ` — ${t('ni.palletDone')}` : ''}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           <div style={GRID3}>
             <Field label={t('ni.commodity')} required>
               <select className="select" value={code} onChange={e => setCode(e.target.value)}>

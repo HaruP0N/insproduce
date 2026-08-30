@@ -277,7 +277,7 @@ function ArriboWizard({ onClose, onSaved, onToast, edit }) {
 
 // Pallets del contenedor agrupados desde el manifiesto: dropdown por pallet con su
 // composición (un pallet puede venir de varios growers/fechas — badge MIXTO).
-function ManifestSection({ data, t, lang, openPallets, setOpenPallets, inspectores, assignEmail, setAssignEmail, assigning, onAssign, onUpload, onInspect }) {
+function ManifestSection({ data, t, lang, openPallets, setOpenPallets, inspectores, assignEmail, setAssignEmail, assigning, onAssign, onUnassign, onUpload, onInspect }) {
   const groups = groupManifest(data.manifest || [])
   const inspByPallet = new Map((data.inspections || []).map((i) => [i.pallet_code, i]))
   const pendingByPallet = new Map((data.pending_assignments || []).map((a) => [a.pallet_number, a]))
@@ -337,7 +337,13 @@ function ManifestSection({ data, t, lang, openPallets, setOpenPallets, inspector
                       {done
                         ? <StatusBadge resolucion={done.resolution === 'approved' ? 'aprobado' : done.resolution === 'conditional' ? 'condicional' : done.resolution === 'rejected' ? 'rechazado' : done.resolution} />
                         : pend
-                          ? <span className="pill-tag"><Icon name="user" size={11} />{t('arr.assigned')} · {pend.inspector_name || ''}</span>
+                          ? <span className="pill-tag">
+                              <Icon name="user" size={11} />{t('arr.assigned')} · {pend.inspector_name || ''}
+                              <button className="btn btn-icon btn-sm" title={t('arr.unassign')} style={{ marginLeft: 4, width: 20, height: 20 }}
+                                onClick={(e) => { e.stopPropagation(); onUnassign(pend) }}>
+                                <Icon name="x" size={11} />
+                              </button>
+                            </span>
                           : <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>—</span>}
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
@@ -489,6 +495,16 @@ function DetalleArribo({ id, onToast, onAddInspection, onReinspect, onBack }) {
     }
   }
 
+  const unassignPallet = async (a) => {
+    try {
+      await api(`/api/assignments/${a.id}`, { method: 'DELETE' })
+      onToast({ title: t('arr.unassigned'), sub: a.pallet_number || a.lot })
+      load()
+    } catch (e) {
+      onToast({ title: t('arr.errSave'), sub: e.message, bad: true })
+    }
+  }
+
   const assignPallet = async (g) => {
     if (!assignEmail) return onToast({ title: t('arr.needInspectorRows'), bad: true })
     setAssigning(g.pallet)
@@ -569,7 +585,7 @@ function DetalleArribo({ id, onToast, onAddInspection, onReinspect, onBack }) {
 
       <ManifestSection data={data} t={t} lang={lang} openPallets={openPallets} setOpenPallets={setOpenPallets}
         inspectores={inspectores} assignEmail={assignEmail} setAssignEmail={setAssignEmail}
-        assigning={assigning} onAssign={assignPallet} onUpload={uploadManifest}
+        assigning={assigning} onAssign={assignPallet} onUnassign={unassignPallet} onUpload={uploadManifest}
         onInspect={(g) => onAddInspection(data, {
           producer: g.growers.join(' + '), lot: g.lot || '', pallet_number: g.pallet,
           variety: g.varieties.join(' / '), packaging: g.parts[0]?.packaging || '',
